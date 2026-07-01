@@ -13,7 +13,7 @@ function slugify(text: string): string {
 }
 
 export async function GET() {
-  if (!(await checkPermission('auth'))) {
+  if (!(await checkPermission('auth', 'view'))) {
     return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
   }
 
@@ -31,13 +31,14 @@ export async function GET() {
     `);
     return NextResponse.json({ success: true, data: res.rows });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API Error in GET /api/admin/departments:', error);
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  if (!(await checkPermission('auth'))) {
-    return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
+  if (!(await checkPermission('auth', 'create'))) {
+    return NextResponse.json({ error: 'Không có quyền thực hiện chức năng này.' }, { status: 403 });
   }
 
   try {
@@ -86,16 +87,17 @@ export async function POST(request: Request) {
       throw err;
     }
   } catch (error: any) {
+    console.error('API Error in POST /api/admin/departments:', error);
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Tên hoặc mã phòng ban đã tồn tại.' }, { status: 400 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
-  if (!(await checkPermission('auth'))) {
-    return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
+  if (!(await checkPermission('auth', 'update'))) {
+    return NextResponse.json({ error: 'Không có quyền thực hiện chức năng này.' }, { status: 403 });
   }
 
   try {
@@ -143,13 +145,14 @@ export async function PUT(request: Request) {
       throw err;
     }
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API Error in PUT /api/admin/departments:', error);
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
-  if (!(await checkPermission('auth'))) {
-    return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
+  if (!(await checkPermission('auth', 'delete'))) {
+    return NextResponse.json({ error: 'Không có quyền thực hiện chức năng này.' }, { status: 403 });
   }
 
   try {
@@ -173,6 +176,7 @@ export async function DELETE(request: Request) {
     await query('DELETE FROM departments WHERE id = $1', [id]);
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API Error in DELETE /api/admin/departments:', error);
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }

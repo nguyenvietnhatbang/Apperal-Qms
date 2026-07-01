@@ -83,6 +83,13 @@ export async function createPayrollCycle(id: string, name: string, startDate: st
 }
 
 export async function deletePayrollCycle(id: string) {
+  const cycleRes = await query("SELECT status FROM payroll_cycles WHERE id = $1", [id]);
+  if (cycleRes.rows.length > 0) {
+    const status = cycleRes.rows[0].status;
+    if (['locked', 'paid', 'cancelled'].includes(status)) {
+      throw new Error(`Kỳ lương này đang ở trạng thái "${status}" và đã được khóa. Không thể xóa.`);
+    }
+  }
   const res = await query('DELETE FROM payroll_cycles WHERE id = $1 RETURNING *', [id]);
   return res.rows[0];
 }
@@ -119,8 +126,35 @@ function calculatePIT(taxableIncome: number): number {
 
 // Calculate and save payroll for a cycle
 export async function calculatePayroll(cycleId: string) {
-  // Fetch employees
-  const { data: employees } = await getAllEmployees();
+  // Load cycle details
+  const cycleRes = await query("SELECT start_date, end_date, rule_set_id, status FROM payroll_cycles WHERE id = $1", [cycleId]);
+  if (cycleRes.rows.length === 0) {
+    throw new Error("Không tìm thấy chu kỳ tính lương.");
+  }
+  const { end_date, rule_set_id: ruleSetId, status } = cycleRes.rows[0];
+  if (['locked', 'paid', 'cancelled'].includes(status)) {
+    throw new Error(`Kỳ lương này đang ở trạng thái "${status}" và đã được khóa. Không thể chạy lại tính toán.`);
+  }
+
+  // Fetch employees and their historic configs active during that cycle
+  const empRes = await query(`
+    SELECT e.id, e.full_name, e.gender, e.department_name, e.position,
+           c.total_salary, c.insurance_salary, c.basic_salary,
+           c.allowance_title, c.allowance_responsibility, c.allowance_seniority, c.allowance_safety,
+           c.allowance_phone, c.allowance_other, c.allowance_travel, c.allowance_housing,
+           c.children_under_6_count, c.dependents_count, c.is_union_member
+    FROM employees e
+    LEFT JOIN LATERAL (
+      SELECT *
+      FROM employee_salary_configs sc
+      WHERE sc.employee_id = e.id
+        AND sc.effective_from <= $1
+      ORDER BY sc.effective_from DESC
+      LIMIT 1
+    ) c ON true
+    WHERE e.deleted_at IS NULL
+  `, [end_date]);
+  const employees = empRes.rows;
   
   // Fetch timekeeping summaries
   const timekeepingSummaries = await getTimekeepingSummary(cycleId);
@@ -129,8 +163,18 @@ export async function calculatePayroll(cycleId: string) {
     tkMap.set(tk.employee_id, tk);
   });
 
-  // Fetch rules
-  const rules = await getPayrollRules();
+  // Load rules for this specific rule set
+  const rulesRes = await query(`
+    SELECT key, COALESCE(value_text, value_numeric::text) as value
+    FROM payroll_rules
+    WHERE rule_set_id = $1
+  `, [ruleSetId]);
+  
+  const rules: Record<string, string> = {};
+  rulesRes.rows.forEach(r => {
+    rules[r.key] = r.value;
+  });
+
   const stdDays = parseFloat(rules.working_days_standard || '26');
   const regOTMul = parseFloat(rules.regular_ot_multiplier || '1.5');
   const sunOTMul = parseFloat(rules.sunday_ot_multiplier || '2.0');
@@ -187,11 +231,21 @@ export async function calculatePayroll(cycleId: string) {
       const otPaySun = Math.round(otHoursSun * sunOTMul * hourlyRate);
       const otPayHol = Math.round(otHoursHol * holOTMul * hourlyRate);
 
-      // Allowances
+      // Allowances - sum up ALL allowances in employee salary configuration
+      const allowanceTitle = Number(emp.allowance_title || 0);
+      const allowanceResp = Number(emp.allowance_responsibility || 0);
       const allowanceSen = Number(emp.allowance_seniority || 0);
+      const allowanceSafe = Number(emp.allowance_safety || 0);
+      const allowancePhone = Number(emp.allowance_phone || 0);
+      const allowanceOther = Number(emp.allowance_other || 0);
+      const allowanceTravel = Number(emp.allowance_travel || 0);
+      const allowanceHousing = Number(emp.allowance_housing || 0);
+      
       const allowanceFemale = emp.gender === 'female' ? Math.round(hourlyRate * femaleHours) : 0;
       const allowanceChildren = Number(emp.children_under_6_count || 0) * childRate;
-      const totalAllowances = allowanceSen + allowanceFemale + allowanceChildren;
+
+      const totalAllowances = allowanceTitle + allowanceResp + allowanceSen + allowanceSafe + allowancePhone +
+                              allowanceOther + allowanceTravel + allowanceHousing + allowanceFemale + allowanceChildren;
 
       // Gross Income
       const grossIncome = salaryWorkdays + salaryLeaveHoliday + totalAllowances + otPayReg + otPaySun + otPayHol;

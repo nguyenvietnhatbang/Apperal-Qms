@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { hashPassword, createSession } from '@/lib/services/auth';
+import { hashPassword, verifyPassword, createSession } from '@/lib/services/auth';
 
 export async function POST(request: Request) {
   try {
@@ -9,8 +9,6 @@ export async function POST(request: Request) {
     if (!username || !password) {
       return NextResponse.json({ success: false, error: 'Vui lòng điền đầy đủ tên đăng nhập và mật khẩu.' }, { status: 400 });
     }
-
-    const hashedPassword = hashPassword(password);
 
     // Query user and their department details
     const res = await query(
@@ -30,7 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Tài khoản của bạn đã bị khóa.' }, { status: 403 });
     }
 
-    if (user.password_hash !== hashedPassword) {
+    if (!verifyPassword(password, user.password_hash)) {
       return NextResponse.json({ success: false, error: 'Tên đăng nhập hoặc mật khẩu không chính xác.' }, { status: 401 });
     }
 

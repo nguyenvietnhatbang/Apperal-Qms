@@ -21,7 +21,7 @@ export async function query(text: string, params?: any[]) {
   const res = await pool.query(text, params);
   const duration = Date.now() - start;
   if (process.env.NODE_ENV !== 'production') {
-    console.log('Executed query', { text, duration, rows: res.rowCount });
+    console.log('Executed query', { duration, rows: res.rowCount });
   }
   return res;
 }

@@ -3,7 +3,7 @@ import { checkPermission } from '@/lib/services/auth';
 import * as employeeService from '@/lib/services/employee';
 
 export async function GET(request: Request) {
-  if (!(await checkPermission('payroll'))) {
+  if (!(await checkPermission('payroll', 'view'))) {
     return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
   }
 
@@ -29,13 +29,14 @@ export async function GET(request: Request) {
     const result = await employeeService.getAllEmployees(search, department, page, limit, sortBy, sortOrder);
     return NextResponse.json({ success: true, data: result.data, total: result.total });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API Error in GET /api/employees:', error);
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  if (!(await checkPermission('payroll'))) {
-    return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
+  if (!(await checkPermission('payroll', 'create'))) {
+    return NextResponse.json({ error: 'Không có quyền thực hiện chức năng này.' }, { status: 403 });
   }
 
   try {
@@ -47,16 +48,17 @@ export async function POST(request: Request) {
     const newEmp = await employeeService.createEmployee(data);
     return NextResponse.json({ success: true, data: newEmp });
   } catch (error: any) {
+    console.error('API Error in POST /api/employees:', error);
     if (error.code === '23505') {
       return NextResponse.json({ error: 'Mã nhân viên đã tồn tại.' }, { status: 400 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
-  if (!(await checkPermission('payroll'))) {
-    return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
+  if (!(await checkPermission('payroll', 'update'))) {
+    return NextResponse.json({ error: 'Không có quyền thực hiện chức năng này.' }, { status: 403 });
   }
 
   try {
@@ -68,13 +70,14 @@ export async function PUT(request: Request) {
     const updated = await employeeService.updateEmployee(data.id, data);
     return NextResponse.json({ success: true, data: updated });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API Error in PUT /api/employees:', error);
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }
 
 export async function DELETE(request: Request) {
-  if (!(await checkPermission('payroll'))) {
-    return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
+  if (!(await checkPermission('payroll', 'delete'))) {
+    return NextResponse.json({ error: 'Không có quyền thực hiện chức năng này.' }, { status: 403 });
   }
 
   try {
@@ -92,6 +95,7 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true, data: deleted });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API Error in DELETE /api/employees:', error);
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }

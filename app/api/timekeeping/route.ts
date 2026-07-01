@@ -3,7 +3,7 @@ import { checkPermission } from '@/lib/services/auth';
 import { parseAndSaveTimekeeping, getTimekeepingRecords } from '@/lib/services/timekeeping';
 
 export async function GET(request: Request) {
-  if (!(await checkPermission('payroll'))) {
+  if (!(await checkPermission('payroll', 'view'))) {
     return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
   }
 
@@ -28,13 +28,14 @@ export async function GET(request: Request) {
     const result = await getTimekeepingRecords(cycleId, employeeId, page, limit, sortBy, sortOrder, search);
     return NextResponse.json({ success: true, data: result.data, total: result.total });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('API Error in GET /api/timekeeping:', error);
+    return NextResponse.json({ error: 'Đã xảy ra lỗi hệ thống.' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  if (!(await checkPermission('payroll'))) {
-    return NextResponse.json({ error: 'Không có quyền truy cập.' }, { status: 403 });
+  if (!(await checkPermission('payroll', 'create'))) {
+    return NextResponse.json({ error: 'Không có quyền thực hiện chức năng này.' }, { status: 403 });
   }
 
   try {
@@ -48,6 +49,6 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('Error importing timekeeping:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message.includes('khóa') ? error.message : 'Đã xảy ra lỗi hệ thống khi nhập tệp chấm công.' }, { status: 500 });
   }
 }

@@ -93,12 +93,7 @@ CREATE TABLE IF NOT EXISTS payroll_rule_sets (
   effective_to date,
   is_default boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at timestamptz NOTtal_workdays, leave_days, holiday_days
-- ot_hours_regular, ot_hours_sunday, ot_hours_holiday
-- salary_workdays, salary_leave_holiday
-- total_allowances, ot_pay_regular, ot_pay_sunday, ot_pay_holiday
-- gross_income
-- deduction_insurance, deductio NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CHECK (effective_to IS NULL OR effective_to >= effective_from)
 );
 

@@ -58,9 +58,23 @@ function formatTimeVal(timeStr: string): string | null {
   return clean;
 }
 
-export async function parseAndSaveTimekeeping(content: string, cycleId: string, fileName: string = 'timekeeping.csv') {
-  const lines = content.split(/\r?\n/);
-  
+export async function parseAndSaveTimekeeping(csvContent: string, cycleId: string, fileName: string = 'import.csv') {
+  // Check cycle status first!
+  const cycleRes = await query("SELECT status FROM payroll_cycles WHERE id = $1", [cycleId]);
+  if (cycleRes.rows.length === 0) {
+    throw new Error("Không tìm thấy chu kỳ tính lương.");
+  }
+  const status = cycleRes.rows[0].status;
+  if (['locked', 'paid', 'cancelled'].includes(status)) {
+    throw new Error(`Kỳ lương này đang ở trạng thái "${status}" và đã được khóa. Không thể nhập dữ liệu chấm công mới.`);
+  }
+
+  const lines = csvContent.split(/\r?\n/);
+  if (lines.length === 0) {
+    throw new Error('Tệp chấm công rỗng.');
+  }
+
+  // Find header row
   let headerIndex = -1;
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes('Mã N.Viên') || lines[i].includes('Mã nhân viên')) {
@@ -70,7 +84,7 @@ export async function parseAndSaveTimekeeping(content: string, cycleId: string, 
   }
 
   if (headerIndex === -1) {
-    throw new Error('Không tìm thấy dòng tiêu đề (Header) hợp lệ trong tệp chấm công.');
+    throw new Error('Không tìm thấy dòng tiêu đề của tệp chấm công.');
   }
 
   const headerCols = lines[headerIndex].split('\t').map(c => c.trim());
@@ -104,8 +118,8 @@ export async function parseAndSaveTimekeeping(content: string, cycleId: string, 
     throw new Error('Tệp chấm công thiếu các cột bắt buộc: Mã N.Viên, Ngày.');
   }
 
-  let importedCount = 0;
-  let newEmployeesCount = 0;
+  let validCount = 0;
+  let invalidCount = 0;
 
   await query('BEGIN');
   try {
@@ -114,7 +128,7 @@ export async function parseAndSaveTimekeeping(content: string, cycleId: string, 
       INSERT INTO attendance_imports (cycle_id, file_name, source_type, status, total_rows)
       VALUES ($1, $2, 'csv', 'uploaded', $3)
       RETURNING id
-    `, [cycleId, fileName, dataLines.length]);
+    `, [cycleId, fileName, dataLines.filter(l => l.trim()).length]);
     const importId = importRes.rows[0].id;
 
     // 2. Delete existing attendance records for this cycle
@@ -131,39 +145,28 @@ export async function parseAndSaveTimekeeping(content: string, cycleId: string, 
         continue;
       }
 
+      const rowJsonData = JSON.stringify(cols);
       const formattedDate = parseCSVDate(rawDate);
-      if (!formattedDate) continue;
+      if (!formattedDate) {
+        // Record as invalid row
+        await query(`
+          INSERT INTO attendance_import_rows (import_id, employee_id, row_data, status, error_message)
+          VALUES ($1, $2, $3, 'invalid', $4)
+        `, [importId, empId, rowJsonData, 'Định dạng ngày chấm công không hợp lệ.']);
+        invalidCount++;
+        continue;
+      }
 
-      const empName = cols[colMap.name]?.trim() || 'Nhân viên mới';
-      const dept = cols[colMap.department]?.trim() || 'Nhân viên';
-      const pos = cols[colMap.position]?.trim() || 'Nhân viên';
-
-      // Verify or auto-create employee profile
+      // Verify employee exists
       const employee = await getEmployeeById(empId);
       if (!employee) {
-        await createEmployee({
-          id: empId,
-          full_name: empName,
-          gender: 'male',
-          department_name: dept,
-          position: pos,
-          join_date: formattedDate,
-          total_salary: 0,
-          insurance_salary: 0,
-          basic_salary: 0,
-          allowance_title: 0,
-          allowance_responsibility: 0,
-          allowance_seniority: 0,
-          allowance_safety: 0,
-          allowance_phone: 0,
-          allowance_other: 0,
-          allowance_travel: 0,
-          allowance_housing: 0,
-          children_under_6_count: 0,
-          dependents_count: 0,
-          is_union_member: true
-        });
-        newEmployeesCount++;
+        // Unmapped employee - record as invalid
+        await query(`
+          INSERT INTO attendance_import_rows (import_id, employee_id, row_data, status, error_message)
+          VALUES ($1, $2, $3, 'invalid', $4)
+        `, [importId, empId, rowJsonData, `Mã nhân viên "${empId}" không tồn tại trong hệ thống.`]);
+        invalidCount++;
+        continue;
       }
 
       const dayOfWeek = cols[colMap.dayOfWeek]?.trim() || '';
@@ -204,19 +207,25 @@ export async function parseAndSaveTimekeeping(content: string, cycleId: string, 
         workCount, workHours, otHoursReg, otHoursSun, otHoursHol,
         shiftName, symbolCode, symbolCodePlus, totalHours
       ]);
-      
-      importedCount++;
+
+      // Record as valid row
+      await query(`
+        INSERT INTO attendance_import_rows (import_id, employee_id, row_data, status)
+        VALUES ($1, $2, $3, 'valid')
+      `, [importId, empId, rowJsonData]);
+
+      validCount++;
     }
 
     // 3. Mark import as processed
     await query(`
       UPDATE attendance_imports 
-      SET status = 'processed', valid_rows = $2
+      SET status = 'processed', valid_rows = $2, invalid_rows = $3
       WHERE id = $1
-    `, [importId, importedCount]);
+    `, [importId, validCount, invalidCount]);
 
     await query('COMMIT');
-    return { success: true, importedCount, newEmployeesCount };
+    return { success: true, importedCount: validCount, invalidCount, newEmployeesCount: 0 };
   } catch (error) {
     await query('ROLLBACK');
     throw error;

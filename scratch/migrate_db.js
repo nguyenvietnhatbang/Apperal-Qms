@@ -19,6 +19,13 @@ const pool = new Pool({
 async function migrate() {
   console.log('--- STARTING DATABASE MIGRATION ---');
 
+  // Safeguard check
+  const isProductionDB = connectionString.includes('neon.tech') || process.env.NODE_ENV === 'production';
+  if (isProductionDB && process.env.ALLOW_DESTRUCTIVE_MIGRATION !== 'true') {
+    console.error('CRITICAL ERROR: Destructive database migration is blocked! To execute migrations on production Neon database, set ALLOW_DESTRUCTIVE_MIGRATION=true');
+    process.exit(1);
+  }
+
   // 1. Drop old tables in reverse dependency order
   console.log('Dropping legacy tables...');
   await pool.query(`

@@ -2,9 +2,16 @@ import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { query } from '../db';
 
-const SESSION_SECRET = process.env.SESSION_SECRET || 'd5a8b7c6e4f3a2b10987654321fedcba'; // Must be 32 chars
-const IV_LENGTH = 16;
+const SESSION_SECRET = process.env.SESSION_SECRET;
+const isBuildPhase = process.env.NEXT_PHASE?.includes('build') || process.env.PHASE?.includes('build');
+if (!SESSION_SECRET && process.env.NODE_ENV === 'production' && !isBuildPhase) {
+  throw new Error('SESSION_SECRET environment variable is required in production mode!');
+}
+const secretKey = SESSION_SECRET || 'd5a8b7c6e4f3a2b10987654321fedcba'; // fallback for dev
 const COOKIE_NAME = 'app_session';
+
+// AES-256-GCM standard key derivation
+const derivedKey = crypto.scryptSync(secretKey.padEnd(32).substring(0, 32), 'session-salt-salt', 32);
 
 export interface SessionPayload {
   userId: string; // uuid
@@ -17,26 +24,45 @@ export interface SessionPayload {
 }
 
 export function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+export function verifyPassword(password: string, storedHash: string): boolean {
+  if (!storedHash) return false;
+  // Fallback to SHA-256 for legacy seed accounts
+  if (!storedHash.includes(':')) {
+    const legacyHash = crypto.createHash('sha256').update(password).digest('hex');
+    return storedHash === legacyHash;
+  }
+  const [salt, hash] = storedHash.split(':');
+  const computedHash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return hash === computedHash;
 }
 
 function encrypt(text: string): string {
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(SESSION_SECRET.padEnd(32).substring(0, 32)), iv);
-  let encrypted = cipher.update(text);
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
-  return iv.toString('hex') + ':' + encrypted.toString('hex');
+  const iv = crypto.randomBytes(12); // 12 bytes IV is standard for GCM
+  const cipher = crypto.createCipheriv('aes-256-gcm', derivedKey, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const tag = cipher.getAuthTag().toString('hex');
+  return iv.toString('hex') + ':' + tag + ':' + encrypted;
 }
 
 function decrypt(text: string): string | null {
   try {
     const parts = text.split(':');
-    const iv = Buffer.from(parts.shift() || '', 'hex');
-    const encryptedText = Buffer.from(parts.join(':'), 'hex');
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(SESSION_SECRET.padEnd(32).substring(0, 32)), iv);
-    let decrypted = decipher.update(encryptedText);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
+    if (parts.length < 3) return null;
+    const iv = Buffer.from(parts[0], 'hex');
+    const tag = Buffer.from(parts[1], 'hex');
+    const encryptedText = parts[2];
+
+    const decipher = crypto.createDecipheriv('aes-256-gcm', derivedKey, iv);
+    decipher.setAuthTag(tag);
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
   } catch (err) {
     return null;
   }
@@ -88,7 +114,10 @@ export async function destroySession() {
   cookieStore.delete(COOKIE_NAME);
 }
 
-export async function checkPermission(requiredModule: string): Promise<boolean> {
+export async function checkPermission(
+  requiredModule: string,
+  action: 'view' | 'create' | 'update' | 'delete' | 'approve' = 'view'
+): Promise<boolean> {
   const session = await getSession();
   if (!session) {
     return false;
@@ -99,7 +128,7 @@ export async function checkPermission(requiredModule: string): Promise<boolean> 
     return true;
   }
 
-  // Fetch fresh permissions from DB just to be sure
+  // Fetch fresh permissions from DB
   try {
     if (session.departmentId) {
       const deptRes = await query('SELECT is_admin FROM departments WHERE id = $1', [session.departmentId]);
@@ -107,14 +136,20 @@ export async function checkPermission(requiredModule: string): Promise<boolean> 
         return true;
       }
 
+      const allowedActions = ['view', 'create', 'update', 'delete', 'approve'];
+      if (!allowedActions.includes(action)) {
+        return false;
+      }
+
+      const permCol = `can_${action}`;
       const res = await query(`
-        SELECT dp.can_view
+        SELECT dp.${permCol} as allowed
         FROM department_permissions dp
         JOIN modules m ON dp.module_id = m.id
         WHERE dp.department_id = $1 AND m.code = $2
       `, [session.departmentId, requiredModule]);
       
-      if (res.rows.length > 0 && res.rows[0].can_view) {
+      if (res.rows.length > 0 && res.rows[0].allowed === true) {
         return true;
       }
     }
@@ -122,5 +157,8 @@ export async function checkPermission(requiredModule: string): Promise<boolean> 
     console.error('Error checking permission in DB', e);
   }
 
-  return session.permissions.includes(requiredModule);
+  if (action === 'view') {
+    return session.permissions.includes(requiredModule);
+  }
+  return false;
 }
