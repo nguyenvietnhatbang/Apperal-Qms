@@ -43,6 +43,34 @@ function readTemplateHeaderRows() {
     .map((line) => line.split("\t"));
 }
 
+function toRoman(value: number) {
+  const romans: Array<[number, string]> = [
+    [1000, "M"],
+    [900, "CM"],
+    [500, "D"],
+    [400, "CD"],
+    [100, "C"],
+    [90, "XC"],
+    [50, "L"],
+    [40, "XL"],
+    [10, "X"],
+    [9, "IX"],
+    [5, "V"],
+    [4, "IV"],
+    [1, "I"],
+  ];
+
+  let result = "";
+  let remaining = value;
+  for (const [decimal, roman] of romans) {
+    while (remaining >= decimal) {
+      result += roman;
+      remaining -= decimal;
+    }
+  }
+  return result;
+}
+
 function buildPayrollRow(row: any, index: number) {
   const salary = row.salaryConfigSnapshot || {};
   const rules = row.ruleSnapshot || {};
@@ -128,6 +156,39 @@ function buildPayrollRow(row: any, index: number) {
   return values.slice(0, 62);
 }
 
+function buildDepartmentSummaryRow(departmentName: string, employeeRows: unknown[][], groupIndex: number) {
+  const summary: unknown[] = Array.from({ length: 62 }, () => "");
+  summary[0] = toRoman(groupIndex + 1);
+  summary[1] = departmentName.toUpperCase();
+
+  for (let columnIndex = 7; columnIndex < 62; columnIndex++) {
+    const total = employeeRows.reduce((sum, row) => sum + toNumber(row[columnIndex]), 0);
+    if (total !== 0) summary[columnIndex] = total;
+  }
+
+  return summary;
+}
+
+function buildGroupedPayrollRows(rows: any[]) {
+  const grouped = new Map<string, any[]>();
+  for (const row of rows) {
+    const departmentName = String(row.departmentName || "CHƯA PHÂN LOẠI").trim() || "CHƯA PHÂN LOẠI";
+    const existingRows = grouped.get(departmentName) || [];
+    existingRows.push(row);
+    grouped.set(departmentName, existingRows);
+  }
+
+  const result: unknown[][] = [];
+  let employeeIndex = 0;
+  Array.from(grouped.entries()).forEach(([departmentName, departmentRows], groupIndex) => {
+    const employeeRows = departmentRows.map((row) => buildPayrollRow(row, employeeIndex++));
+    result.push(buildDepartmentSummaryRow(departmentName, employeeRows, groupIndex));
+    result.push(...employeeRows);
+  });
+
+  return result;
+}
+
 export class PayrollExportService {
   static async exportPayrollWorkbook(cycleId: string, source: PayrollExportSource) {
     const cycle = await queryOne(
@@ -154,16 +215,17 @@ export class PayrollExportService {
               p.personal_income_tax_amount as "personalIncomeTaxAmount", p.advance_payment_1 as "advancePayment1",
               p.advance_payment_2 as "advancePayment2", p.total_deduction as "totalDeduction",
               p.net_salary as "netSalary", p.second_payment_amount as "secondPaymentAmount",
-              e.gender, e.position_title as "positionTitle", e.joined_date as "joinedDate", e.dependent_count as "dependentCount"
+              e.gender, e.department_name as "departmentName", e.position_title as "positionTitle",
+              e.joined_date as "joinedDate", e.dependent_count as "dependentCount"
        FROM ${tableName} p
        LEFT JOIN employees e ON e.id = p.employee_id
        WHERE p.payroll_cycle_id = $1
-       ORDER BY p.employee_code ASC`,
+       ORDER BY e.department_name ASC NULLS LAST, p.employee_code ASC`,
       [cycleId]
     );
 
     const headerRows = readTemplateHeaderRows();
-    const dataRows = rows.map((row, index) => buildPayrollRow(row, index));
+    const dataRows = buildGroupedPayrollRows(rows);
     const worksheet = XLSX.utils.aoa_to_sheet([...headerRows, ...dataRows]);
 
     worksheet["!cols"] = [
