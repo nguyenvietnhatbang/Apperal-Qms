@@ -75,7 +75,7 @@ export default function PayrollDashboardClient({
   const router = useRouter();
   const isAuditOnlyUser = currentUser.username === "admin2";
   const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
-    isAuditOnlyUser ? "auditAttendance" : "employees"
+    "employees"
   );
   const [cycles, setCycles] = useState(initialCycles);
   const [employees, setEmployees] = useState(initialEmployees);
@@ -877,26 +877,26 @@ export default function PayrollDashboardClient({
 
           {/* Nav Links */}
           <nav className="p-4 space-y-1">
+            <button
+              onClick={() => { setActiveTab("employees"); setSearchTerm(""); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                activeTab === "employees" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+              }`}
+            >
+              <Users className="w-5 h-5" />
+              <span>Nhân sự & Lương riêng</span>
+            </button>
+            <button
+              onClick={() => { setActiveTab("rules"); setSearchTerm(""); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                activeTab === "rules" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+              <span>Cấu hình quy tắc chung</span>
+            </button>
             {!isAuditOnlyUser && (
               <>
-                <button
-                  onClick={() => { setActiveTab("employees"); setSearchTerm(""); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                    activeTab === "employees" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
-                  }`}
-                >
-                  <Users className="w-5 h-5" />
-                  <span>Nhân sự & Lương riêng</span>
-                </button>
-                <button
-                  onClick={() => { setActiveTab("rules"); setSearchTerm(""); }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                    activeTab === "rules" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
-                  }`}
-                >
-                  <Settings className="w-5 h-5" />
-                  <span>Cấu hình quy tắc chung</span>
-                </button>
                 <button
                   onClick={() => { setActiveTab("cycles"); setSearchTerm(""); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
@@ -927,19 +927,17 @@ export default function PayrollDashboardClient({
                 <div className="pt-3 mt-3 border-t border-zinc-150 text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-3">
                   Audit
                 </div>
+                <button
+                  onClick={() => { setActiveTab("auditConfig"); setSearchTerm(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                    activeTab === "auditConfig" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  }`}
+                >
+                  <SlidersHorizontal className="w-5 h-5" />
+                  <span>Cấu hình audit</span>
+                </button>
               </>
             )}
-            <button
-              onClick={() => { setActiveTab("auditConfig"); setSearchTerm(""); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "auditConfig"
-                  ? isAuditOnlyUser ? "bg-blue-50 text-blue-600 shadow-sm" : "bg-emerald-50 text-emerald-700 shadow-sm"
-                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
-              }`}
-            >
-              <SlidersHorizontal className="w-5 h-5" />
-              <span>{isAuditOnlyUser ? "Cấu hình quy tắc" : "Cấu hình audit"}</span>
-            </button>
             <button
               onClick={() => { setActiveTab("auditAttendance"); setSearchTerm(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
