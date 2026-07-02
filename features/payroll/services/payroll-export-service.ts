@@ -1,5 +1,3 @@
-import fs from "node:fs";
-import path from "node:path";
 import * as XLSX from "xlsx";
 import { query, queryOne } from "@/lib/db";
 
@@ -26,21 +24,160 @@ function getRuleValue(snapshot: unknown, key: string) {
   return toNumber((snapshot as Record<string, unknown>)[key]);
 }
 
-function readTemplateHeaderRows() {
-  const templatePath = path.join(process.cwd(), "docs", "bangluong.csv");
-  const fallback = [
-    ["", ...Array.from({ length: 61 }, (_, index) => String(index + 1))],
-    ["STT", "Mã nhân viên", "HỌ & TÊN", "Giới tính", "", "Chức Danh", "Ngày gia nhập\nCty"],
-    ["", "", "", "Nam", "Nữ", "", ""],
+function createEmptyRow() {
+  return Array.from({ length: 62 }, () => "") as unknown[];
+}
+
+function getPayrollTitle(cycle: any) {
+  const periodStart = new Date(String(cycle.periodStart));
+  if (!Number.isNaN(periodStart.getTime())) {
+    const month = String(periodStart.getUTCMonth() + 1).padStart(2, "0");
+    return `BẢNG LƯƠNG THÁNG ${month}/${periodStart.getUTCFullYear()}`;
+  }
+
+  return `BẢNG LƯƠNG ${String(cycle.name || cycle.code || "").toUpperCase()}`;
+}
+
+function buildTemplateRows(cycle: any) {
+  const rows = Array.from({ length: 8 }, () => createEmptyRow());
+
+  rows[0][1] = "CÔNG TY TNHH TM MTV CẨM THIÊN";
+  rows[1][1] = "Địa chỉ: Tổ 11, KP. Bình Ý, Phường Tân Triều, tỉnh Đồng Nai.";
+  rows[1][39] = 973500;
+  rows[2][11] = toNumber(cycle.standardWorkdays) || 26;
+  rows[3][1] = getPayrollTitle(cycle);
+  rows[4][18] = 25000;
+  rows[5] = ["", ...Array.from({ length: 61 }, (_, index) => index + 1)];
+
+  const mainHeader = rows[6];
+  const subHeader = rows[7];
+
+  mainHeader[0] = "STT";
+  mainHeader[1] = "Mã nhân viên";
+  mainHeader[2] = "HỌ & TÊN";
+  mainHeader[3] = "Giới tính";
+  subHeader[3] = "Nam";
+  subHeader[4] = "Nữ";
+  mainHeader[5] = "Chức Danh";
+  mainHeader[6] = "Ngày gia nhập\nCty";
+  mainHeader[7] = "Tổng lương";
+  mainHeader[8] = "Lương đóng BH";
+  mainHeader[9] = "Lương cơ bản";
+
+  mainHeader[10] = "Các khoản phụ cấp";
+  subHeader[10] = "Chức danh";
+  subHeader[11] = "Trách nhiệm";
+  subHeader[12] = "Thâm niên";
+  subHeader[13] = "An toàn VSSV";
+
+  mainHeader[14] = "Các khoản thưởng và hỗ trợ";
+  subHeader[14] = "Điện thoại";
+  subHeader[15] = "PC khác\n( Thưởng)";
+  subHeader[16] = "Thưởng tuân thủ";
+  subHeader[17] = "Công tác";
+  subHeader[18] = "Đi lại\n(Xăng xe)";
+  subHeader[19] = "Nhà ở";
+  subHeader[20] = "Chuyên cần";
+
+  mainHeader[21] = "Tổng hợp phép năm";
+  subHeader[21] = "Tổng ngày\nphép";
+  subHeader[22] = "Phép sd trong\ntháng";
+  subHeader[23] = "Số giờ PN";
+  subHeader[24] = "Phép đã\nsd cộng dồn";
+  subHeader[25] = "Phép\ncòn lại";
+  subHeader[26] = "Nghỉ\nviệc riêng";
+
+  mainHeader[27] = "Ngày Lễ";
+  mainHeader[28] = "Tổng Ngày công làm việc";
+  mainHeader[29] = "TỔNG TG T.CA";
+  subHeader[29] = "Ngày thường";
+  subHeader[30] = "ngày CN";
+  subHeader[31] = "Ngày lễ tết";
+
+  mainHeader[32] = "Các khoản Công ty trích đóng";
+  subHeader[32] = "BHXH\n17.5% cty trả";
+  subHeader[33] = "BHYT 3%\nCty trả";
+  subHeader[34] = "BHTN 1%\nCty trả";
+  subHeader[35] = "CÔNG ĐOÀN\n2%";
+
+  mainHeader[36] = "Lương\ntháng ngày";
+  mainHeader[37] = "Hỗ trợ";
+  subHeader[37] = "Phụ cấp phí Ctác";
+  subHeader[38] = "Ngày hành kinh PN/ 1,5h";
+  subHeader[39] = "Con nhỏ\n < 6 tuổi";
+
+  mainHeader[40] = "Tiền tăng ca";
+  subHeader[40] = "Tăng ca ngày thường 150%";
+  subHeader[41] = "Tăng ca CN 200%";
+  subHeader[42] = "Tăng ca ngày lễ 300%";
+
+  mainHeader[43] = "Lương Phép, Lễ";
+  mainHeader[44] = "Tổng thu nhập";
+  mainHeader[45] = "Các khoản khấu trừ lương";
+  subHeader[45] = "Khấu trừ BHXH 10,5%";
+  subHeader[46] = "Đoàn phí";
+  subHeader[47] = "Số người PT";
+  subHeader[48] = "Thu nhập chịu thuế";
+  subHeader[49] = "Thuế TNCN";
+
+  mainHeader[50] = "Lương thực nhận";
+  mainHeader[51] = "Lương ứng đợt 1";
+  mainHeader[52] = "Lương ứng đợt 2";
+  mainHeader[53] = "Tiền lương còn lại";
+  mainHeader[54] = "Chữ ký Nhân Viên";
+  mainHeader[55] = "Số giờ OT thường vượt";
+  mainHeader[56] = "Sồ giờ OT chủ nhật";
+  mainHeader[57] = "Số giờ OT lễ";
+  mainHeader[58] = "Làm đêm";
+  mainHeader[59] = "Lương OT vượt bao gồm CN và Lễ";
+  mainHeader[60] = "Lương làm đêm";
+  mainHeader[61] = "Tổng chi lần 2";
+
+  return rows;
+}
+
+function getWorksheetMerges() {
+  const merge = (s: string, e: string) => ({ s: XLSX.utils.decode_cell(s), e: XLSX.utils.decode_cell(e) });
+
+  return [
+    merge("B4", "BJ4"),
+    merge("D7", "E7"),
+    merge("K7", "N7"),
+    merge("O7", "U7"),
+    merge("V7", "AA7"),
+    merge("AD7", "AF7"),
+    merge("AG7", "AJ7"),
+    merge("AL7", "AN7"),
+    merge("AO7", "AQ7"),
+    merge("AT7", "AX7"),
+    ...[
+      "A",
+      "B",
+      "C",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J",
+      "AB",
+      "AC",
+      "AK",
+      "AR",
+      "AS",
+      "AY",
+      "AZ",
+      "BA",
+      "BB",
+      "BC",
+      "BD",
+      "BE",
+      "BF",
+      "BG",
+      "BH",
+      "BI",
+      "BJ",
+    ].map((column) => merge(`${column}7`, `${column}8`)),
   ];
-
-  if (!fs.existsSync(templatePath)) return fallback;
-
-  return fs
-    .readFileSync(templatePath, "utf8")
-    .split(/\r?\n/)
-    .slice(0, 3)
-    .map((line) => line.split("\t"));
 }
 
 function toRoman(value: number) {
@@ -192,7 +329,8 @@ function buildGroupedPayrollRows(rows: any[]) {
 export class PayrollExportService {
   static async exportPayrollWorkbook(cycleId: string, source: PayrollExportSource) {
     const cycle = await queryOne(
-      `SELECT code, name, period_start as "periodStart", period_end as "periodEnd"
+      `SELECT code, name, period_start as "periodStart", period_end as "periodEnd",
+              standard_workdays as "standardWorkdays"
        FROM payroll_cycles
        WHERE id = $1`,
       [cycleId]
@@ -224,10 +362,21 @@ export class PayrollExportService {
       [cycleId]
     );
 
-    const headerRows = readTemplateHeaderRows();
+    const headerRows = buildTemplateRows(cycle);
     const dataRows = buildGroupedPayrollRows(rows);
     const worksheet = XLSX.utils.aoa_to_sheet([...headerRows, ...dataRows]);
 
+    worksheet["!merges"] = getWorksheetMerges();
+    worksheet["!rows"] = [
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 20 },
+      { hpt: 28 },
+      { hpt: 20 },
+      { hpt: 18 },
+      { hpt: 42 },
+      { hpt: 52 },
+    ];
     worksheet["!cols"] = [
       { wch: 6 },
       { wch: 14 },
