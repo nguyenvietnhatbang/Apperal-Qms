@@ -103,6 +103,7 @@ export class AttendanceImportService {
 
       // Process rows after the header row
       let totalRows = 0;
+      const rawRowsToInsert: Array<{ rowNumber: number; rawData: Record<string, any> }> = [];
       for (let i = headerRowIndex + 1; i < rawRows.length; i++) {
         const row = rawRows[i];
         if (!row || row.length === 0 || (row.length === 1 && !row[0])) continue;
@@ -123,12 +124,15 @@ export class AttendanceImportService {
         if (!hasData) continue;
 
         totalRows++;
-        
-        // Insert into raw rows
+        rawRowsToInsert.push({ rowNumber: totalRows, rawData: rowData });
+      }
+
+      if (rawRowsToInsert.length > 0) {
         await client.query(
           `INSERT INTO attendance_raw_rows (import_id, row_number, raw_data)
-           VALUES ($1, $2, $3)`,
-          [importId, totalRows, JSON.stringify(rowData)]
+           SELECT $1, (row_data->>'rowNumber')::int, row_data->'rawData'
+           FROM jsonb_array_elements($2::jsonb) AS row_data`,
+          [importId, JSON.stringify(rawRowsToInsert)]
         );
       }
 

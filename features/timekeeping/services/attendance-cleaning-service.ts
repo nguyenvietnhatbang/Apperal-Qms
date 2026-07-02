@@ -1,7 +1,5 @@
 import { query, queryOne, transaction } from "@/lib/db";
 import { parseVNDecimal } from "@/lib/format";
-import { EmployeeService } from "@/features/employees/services/employee-service";
-import { SalaryConfigService } from "@/features/employees/services/salary-config-service";
 
 export class AttendanceCleaningService {
   /**
@@ -135,39 +133,8 @@ export class AttendanceCleaningService {
           const checkIn3 = parseTime(data["vao3"]);
           const checkOut3 = parseTime(data["ra3"]);
 
-          // Map employee or auto-create if not exists
-          let emp = await client.query(
-            `SELECT id FROM employees WHERE employee_code = $1 AND deleted_at IS NULL`,
-            [employeeCode]
-          );
-
-          let employeeId: string;
-          if (emp.rows.length === 0) {
-            // Auto-create active employee
-            const newEmp = await EmployeeService.createEmployee({
-              employeeCode,
-              fullName: employeeName,
-              departmentName: departmentName || "Chưa phân loại",
-              positionTitle: positionTitle || "Nhân viên",
-              status: "active",
-            });
-            employeeId = newEmp.id;
-
-            // Create default salary config for auto-created employee (base_salary = 0)
-            await SalaryConfigService.createSalaryConfig({
-              employeeId,
-              effectiveFrom: "2026-01-01",
-              totalSalary: 0,
-              insuranceSalary: 0,
-              baseSalary: 0,
-              note: "Cấu hình lương tự động tạo khi import chấm công thô.",
-            });
-          } else {
-            employeeId = emp.rows[0].id;
-          }
-
           parsedRecords.push({
-            employeeId,
+            employeeId: null,
             employeeCode,
             employeeName,
             workDate,
@@ -208,6 +175,70 @@ export class AttendanceCleaningService {
              WHERE id = $2`,
             [JSON.stringify(errors), row.id]
           );
+        }
+      }
+
+      if (parsedRecords.length > 0) {
+        const uniqueEmployeeMap = new Map<string, any>();
+        for (const record of parsedRecords) {
+          if (!uniqueEmployeeMap.has(record.employeeCode)) {
+            uniqueEmployeeMap.set(record.employeeCode, record);
+          }
+        }
+
+        const employeeCodes = Array.from(uniqueEmployeeMap.keys());
+        const existingEmployees = await client.query(
+          `SELECT id, employee_code
+           FROM employees
+           WHERE employee_code = ANY($1::text[]) AND deleted_at IS NULL`,
+          [employeeCodes]
+        );
+
+        const employeeIdByCode = new Map<string, string>();
+        for (const employee of existingEmployees.rows) {
+          employeeIdByCode.set(employee.employee_code, employee.id);
+        }
+
+        const missingEmployees = employeeCodes
+          .filter((employeeCode) => !employeeIdByCode.has(employeeCode))
+          .map((employeeCode) => {
+            const record = uniqueEmployeeMap.get(employeeCode);
+            return {
+              employeeCode,
+              fullName: record.employeeName,
+              departmentName: record.departmentName || "Chưa phân loại",
+              positionTitle: record.positionTitle || "Nhân viên",
+            };
+          });
+
+        if (missingEmployees.length > 0) {
+          const insertedEmployees = await client.query(
+            `INSERT INTO employees (employee_code, full_name, department_name, position_title, status)
+             SELECT "employeeCode", "fullName", "departmentName", "positionTitle", 'active'
+             FROM jsonb_to_recordset($1::jsonb) AS employee_data(
+               "employeeCode" text,
+               "fullName" text,
+               "departmentName" text,
+               "positionTitle" text
+             )
+             RETURNING id, employee_code`,
+            [JSON.stringify(missingEmployees)]
+          );
+
+          for (const employee of insertedEmployees.rows) {
+            employeeIdByCode.set(employee.employee_code, employee.id);
+          }
+
+          await client.query(
+            `INSERT INTO employee_salary_configs (employee_id, effective_from, total_salary, insurance_salary, base_salary, note)
+             SELECT id, '2026-01-01'::date, 0, 0, 0, 'Cấu hình lương tự động tạo khi import chấm công thô.'
+             FROM jsonb_to_recordset($1::jsonb) AS employee_data(id uuid)`,
+            [JSON.stringify(insertedEmployees.rows)]
+          );
+        }
+
+        for (const record of parsedRecords) {
+          record.employeeId = employeeIdByCode.get(record.employeeCode);
         }
       }
 
@@ -258,7 +289,8 @@ export class AttendanceCleaningService {
       }
 
       // Insert the consolidated, cleaned records
-      for (const r of groupedMap.values()) {
+      const attendanceRows = Array.from(groupedMap.values());
+      if (attendanceRows.length > 0) {
         await client.query(
           `INSERT INTO attendance_records (
              payroll_cycle_id, import_id, employee_id, employee_code, employee_name, work_date, weekday_name,
@@ -267,36 +299,67 @@ export class AttendanceCleaningService {
              early_leave_minutes, overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, 
              symbol, extra_symbol, total_hours
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)`,
+           SELECT
+             $1,
+             $2,
+             "employeeId",
+             "employeeCode",
+             "employeeName",
+             "workDate",
+             "weekdayName",
+             "departmentName",
+             "positionTitle",
+             "shiftName",
+             "checkIn1",
+             "checkOut1",
+             "checkIn2",
+             "checkOut2",
+             "checkIn3",
+             "checkOut3",
+             "workdayCount",
+             "workHours",
+             "extraWorkdayCount",
+             "extraHours",
+             "lateMinutes",
+             "earlyLeaveMinutes",
+             "overtimeNormalHours",
+             "overtimeSundayHours",
+             "overtimeHolidayHours",
+             symbol,
+             "extraSymbol",
+             "totalHours"
+           FROM jsonb_to_recordset($3::jsonb) AS attendance_data(
+             "employeeId" uuid,
+             "employeeCode" text,
+             "employeeName" text,
+             "workDate" date,
+             "weekdayName" text,
+             "departmentName" text,
+             "positionTitle" text,
+             "shiftName" text,
+             "checkIn1" time,
+             "checkOut1" time,
+             "checkIn2" time,
+             "checkOut2" time,
+             "checkIn3" time,
+             "checkOut3" time,
+             "workdayCount" numeric,
+             "workHours" numeric,
+             "extraWorkdayCount" numeric,
+             "extraHours" numeric,
+             "lateMinutes" integer,
+             "earlyLeaveMinutes" integer,
+             "overtimeNormalHours" numeric,
+             "overtimeSundayHours" numeric,
+             "overtimeHolidayHours" numeric,
+             symbol text,
+             "extraSymbol" text,
+             "totalHours" numeric
+           )`,
           [
             payroll_cycle_id,
             importId,
-            r.employeeId,
-            r.employeeCode,
-            r.employeeName,
-            r.workDate,
-            r.weekdayName,
-            r.departmentName,
-            r.positionTitle,
-            r.shiftName,
-            r.checkIn1,
-            r.checkOut1,
-            r.checkIn2,
-            r.checkOut2,
-            r.checkIn3,
-            r.checkOut3,
-            r.workdayCount,
-            r.workHours,
-            r.extraWorkdayCount,
-            r.extraHours,
-            r.lateMinutes,
-            r.earlyLeaveMinutes,
-            r.overtimeNormalHours,
-            r.overtimeSundayHours,
-            r.overtimeHolidayHours,
-            r.symbol,
-            r.extraSymbol,
-            r.totalHours,
+            JSON.stringify(attendanceRows),
           ]
         );
       }

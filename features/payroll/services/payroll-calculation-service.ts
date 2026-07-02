@@ -1,6 +1,5 @@
 import { query, queryOne, transaction } from "@/lib/db";
 import { PayrollRuleService } from "./payroll-rule-service";
-import { SalaryConfigService } from "@/features/employees/services/salary-config-service";
 
 export class PayrollCalculationService {
   /**
@@ -42,57 +41,73 @@ export class PayrollCalculationService {
          ORDER BY employee_code ASC`
       );
       const employees = employeesRes.rows;
+      const employeeIds = employees.map((employee: any) => employee.id);
 
       // 4. Clear existing calculations for this cycle
       await client.query(`DELETE FROM payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
 
       const periodEndStr = new Date(cycle.period_end).toISOString().split("T")[0];
+      const salaryConfigsRes = employeeIds.length > 0
+        ? await client.query(
+            `SELECT DISTINCT ON (employee_id)
+                    id, employee_id as "employeeId", effective_from as "effectiveFrom", effective_to as "effectiveTo",
+                    total_salary as "totalSalary", insurance_salary as "insuranceSalary", base_salary as "baseSalary",
+                    position_allowance as "positionAllowance", responsibility_allowance as "responsibilityAllowance",
+                    seniority_allowance as "seniorityAllowance", safety_allowance as "safetyAllowance",
+                    phone_allowance as "phoneAllowance", travel_allowance as "travelAllowance",
+                    housing_allowance as "housingAllowance", attendance_bonus as "attendanceBonus",
+                    other_bonus as "otherBonus", meal_allowance as "mealAllowance", note
+             FROM employee_salary_configs
+             WHERE employee_id = ANY($1::uuid[])
+               AND effective_from <= $2::date
+               AND (effective_to IS NULL OR effective_to >= $2::date)
+             ORDER BY employee_id, effective_from DESC`,
+            [employeeIds, periodEndStr]
+          )
+        : { rows: [] };
+      const salaryConfigByEmployeeId = new Map<string, any>(
+        salaryConfigsRes.rows.map((config: any) => [config.employeeId, config])
+      );
+
+      const attendanceTotalsRes = employeeIds.length > 0
+        ? await client.query(
+            `SELECT employee_id as "employeeId",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN', 'P') THEN 1 ELSE 0 END), 0) as "paidLeaveDays",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L', 'LE') THEN 1 ELSE 0 END), 0) as "holidayDays",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('RO', 'KP') THEN 1 ELSE 0 END), 0) as "unpaidLeaveDays",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) NOT IN ('PN', 'P', 'L', 'LE', 'RO', 'KP') THEN workday_count ELSE 0 END), 0) as "actualWorkdays",
+                    COALESCE(SUM(overtime_normal_hours), 0) as "overtimeNormalHours",
+                    COALESCE(SUM(overtime_sunday_hours), 0) as "overtimeSundayHours",
+                    COALESCE(SUM(overtime_holiday_hours), 0) as "overtimeHolidayHours"
+             FROM attendance_records
+             WHERE payroll_cycle_id = $1 AND employee_id = ANY($2::uuid[])
+             GROUP BY employee_id`,
+            [cycleId, employeeIds]
+          )
+        : { rows: [] };
+      const attendanceTotalsByEmployeeId = new Map<string, any>(
+        attendanceTotalsRes.rows.map((attendance: any) => [attendance.employeeId, attendance])
+      );
+      const payrollRows: any[] = [];
+      const payrollLinesByEmployeeId = new Map<string, any[]>();
 
       for (const emp of employees) {
         // Fetch active salary config for the employee at the end of the period
-        const salaryConfig = await SalaryConfigService.getActiveConfig(emp.id, periodEndStr);
+        const salaryConfig = salaryConfigByEmployeeId.get(emp.id);
         if (!salaryConfig) {
           // Skip if no salary config is set
           console.warn(`Employee ${emp.employee_code} has no active salary configuration for date ${periodEndStr}`);
           continue;
         }
 
-        // Fetch attendance records for the employee in this cycle
-        const attendanceRes = await client.query(
-          `SELECT workday_count, work_hours, overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, symbol 
-           FROM attendance_records 
-           WHERE payroll_cycle_id = $1 AND employee_id = $2`,
-          [cycleId, emp.id]
-        );
-        const attendance = attendanceRes.rows;
-
-        // Aggregate attendance data
-        let actualWorkdays = 0;
-        let paidLeaveDays = 0;
-        let holidayDays = 0;
-        let unpaidLeaveDays = 0;
-        let overtimeNormalHours = 0;
-        let overtimeSundayHours = 0;
-        let overtimeHolidayHours = 0;
-
-        for (const att of attendance) {
-          const workdayVal = parseFloat(att.workday_count || 0);
-          const sym = String(att.symbol || "").toUpperCase().trim();
-          
-          if (sym === "PN" || sym === "P") {
-            paidLeaveDays += 1; // 1 day of paid leave
-          } else if (sym === "L" || sym === "LE") {
-            holidayDays += 1; // 1 day of holiday
-          } else if (sym === "RO" || sym === "KP") {
-            unpaidLeaveDays += 1; // 1 day of unpaid leave
-          } else {
-            actualWorkdays += workdayVal;
-          }
-          
-          overtimeNormalHours += parseFloat(att.overtime_normal_hours || 0);
-          overtimeSundayHours += parseFloat(att.overtime_sunday_hours || 0);
-          overtimeHolidayHours += parseFloat(att.overtime_holiday_hours || 0);
-        }
+        const attendanceTotals = attendanceTotalsByEmployeeId.get(emp.id);
+        const actualWorkdays = parseFloat(attendanceTotals?.actualWorkdays || 0);
+        const paidLeaveDays = parseFloat(attendanceTotals?.paidLeaveDays || 0);
+        const holidayDays = parseFloat(attendanceTotals?.holidayDays || 0);
+        const unpaidLeaveDays = parseFloat(attendanceTotals?.unpaidLeaveDays || 0);
+        const overtimeNormalHours = parseFloat(attendanceTotals?.overtimeNormalHours || 0);
+        const overtimeSundayHours = parseFloat(attendanceTotals?.overtimeSundayHours || 0);
+        const overtimeHolidayHours = parseFloat(attendanceTotals?.overtimeHolidayHours || 0);
 
         // Calculate rates
         const totalSalary = parseFloat(salaryConfig.totalSalary || 0);
@@ -209,52 +224,37 @@ export class PayrollCalculationService {
         // Round final net salary to nearest thousand VND
         const secondPaymentAmount = Math.round(netSalary / 1000) * 1000;
 
-        // 5. Insert payroll item snapshot
-        const itemRes = await client.query(
-          `INSERT INTO payroll_items (
-             payroll_cycle_id, employee_id, employee_code, employee_name, salary_config_snapshot, rule_snapshot,
-             actual_workdays, paid_leave_days, holiday_days, unpaid_leave_days, overtime_normal_hours, overtime_sunday_hours,
-             overtime_holiday_hours, monthly_salary_amount, paid_leave_amount, overtime_normal_amount, overtime_sunday_amount,
-             overtime_holiday_amount, allowance_amount, gross_income, company_insurance_amount, employee_insurance_amount,
-             union_fee_amount, personal_income_tax_amount, advance_payment_1, advance_payment_2, total_deduction,
-             net_salary, second_payment_amount, note
-           )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
-           RETURNING id`,
-          [
-            cycleId,
-            emp.id,
-            emp.employee_code,
-            emp.full_name,
-            JSON.stringify(salaryConfig),
-            JSON.stringify(rules),
-            actualWorkdays,
-            paidLeaveDays,
-            holidayDays,
-            unpaidLeaveDays,
-            overtimeNormalHours,
-            overtimeSundayHours,
-            overtimeHolidayHours,
-            monthlySalaryAmount,
-            paidLeaveAmount,
-            overtimeNormalAmount,
-            overtimeSundayAmount,
-            overtimeHolidayAmount,
-            flatAllowanceAmount,
-            grossIncome,
-            companyInsuranceAmount,
-            employeeInsuranceAmount,
-            unionFeeAmount,
-            pitAmount,
-            advancePayment1,
-            advancePayment2,
-            totalDeduction,
-            netSalary,
-            secondPaymentAmount,
-            `Tính lương cho chu kỳ ${cycle.code}.`,
-          ]
-        );
-        const itemId = itemRes.rows[0].id;
+        payrollRows.push({
+          employeeId: emp.id,
+          employeeCode: emp.employee_code,
+          employeeName: emp.full_name,
+          salaryConfigSnapshot: salaryConfig,
+          ruleSnapshot: rules,
+          actualWorkdays,
+          paidLeaveDays,
+          holidayDays,
+          unpaidLeaveDays,
+          overtimeNormalHours,
+          overtimeSundayHours,
+          overtimeHolidayHours,
+          monthlySalaryAmount,
+          paidLeaveAmount,
+          overtimeNormalAmount,
+          overtimeSundayAmount,
+          overtimeHolidayAmount,
+          allowanceAmount: flatAllowanceAmount,
+          grossIncome,
+          companyInsuranceAmount,
+          employeeInsuranceAmount,
+          unionFeeAmount,
+          personalIncomeTaxAmount: pitAmount,
+          advancePayment1,
+          advancePayment2,
+          totalDeduction,
+          netSalary,
+          secondPaymentAmount,
+          note: `Tính lương cho chu kỳ ${cycle.code}.`,
+        });
 
         // 6. Write detailed lines into payroll_item_lines
         const lines = [
@@ -292,11 +292,90 @@ export class PayrollCalculationService {
           lines.push({ code: "thue_tncn", name: "Thuế TNCN", qty: 1, rate: pitAmount, amount: pitAmount, type: "deduction", order: 120 });
         }
 
-        for (const line of lines) {
+        payrollLinesByEmployeeId.set(emp.id, lines);
+      }
+
+      if (payrollRows.length > 0) {
+        const insertedItems = await client.query(
+          `INSERT INTO payroll_items (
+             payroll_cycle_id, employee_id, employee_code, employee_name, salary_config_snapshot, rule_snapshot,
+             actual_workdays, paid_leave_days, holiday_days, unpaid_leave_days, overtime_normal_hours, overtime_sunday_hours,
+             overtime_holiday_hours, monthly_salary_amount, paid_leave_amount, overtime_normal_amount, overtime_sunday_amount,
+             overtime_holiday_amount, allowance_amount, gross_income, company_insurance_amount, employee_insurance_amount,
+             union_fee_amount, personal_income_tax_amount, advance_payment_1, advance_payment_2, total_deduction,
+             net_salary, second_payment_amount, note
+           )
+           SELECT
+             $1, "employeeId", "employeeCode", "employeeName", "salaryConfigSnapshot", "ruleSnapshot",
+             "actualWorkdays", "paidLeaveDays", "holidayDays", "unpaidLeaveDays", "overtimeNormalHours", "overtimeSundayHours",
+             "overtimeHolidayHours", "monthlySalaryAmount", "paidLeaveAmount", "overtimeNormalAmount", "overtimeSundayAmount",
+             "overtimeHolidayAmount", "allowanceAmount", "grossIncome", "companyInsuranceAmount", "employeeInsuranceAmount",
+             "unionFeeAmount", "personalIncomeTaxAmount", "advancePayment1", "advancePayment2", "totalDeduction",
+             "netSalary", "secondPaymentAmount", note
+           FROM jsonb_to_recordset($2::jsonb) AS payroll_data(
+             "employeeId" uuid,
+             "employeeCode" text,
+             "employeeName" text,
+             "salaryConfigSnapshot" jsonb,
+             "ruleSnapshot" jsonb,
+             "actualWorkdays" numeric,
+             "paidLeaveDays" numeric,
+             "holidayDays" numeric,
+             "unpaidLeaveDays" numeric,
+             "overtimeNormalHours" numeric,
+             "overtimeSundayHours" numeric,
+             "overtimeHolidayHours" numeric,
+             "monthlySalaryAmount" numeric,
+             "paidLeaveAmount" numeric,
+             "overtimeNormalAmount" numeric,
+             "overtimeSundayAmount" numeric,
+             "overtimeHolidayAmount" numeric,
+             "allowanceAmount" numeric,
+             "grossIncome" numeric,
+             "companyInsuranceAmount" numeric,
+             "employeeInsuranceAmount" numeric,
+             "unionFeeAmount" numeric,
+             "personalIncomeTaxAmount" numeric,
+             "advancePayment1" numeric,
+             "advancePayment2" numeric,
+             "totalDeduction" numeric,
+             "netSalary" numeric,
+             "secondPaymentAmount" numeric,
+             note text
+           )
+           RETURNING id, employee_id as "employeeId"`,
+          [cycleId, JSON.stringify(payrollRows)]
+        );
+
+        const lineRows = insertedItems.rows.flatMap((item: any) => {
+          const lines = payrollLinesByEmployeeId.get(item.employeeId) || [];
+          return lines.map((line) => ({
+            payrollItemId: item.id,
+            lineCode: line.code,
+            lineName: line.name,
+            quantity: line.qty,
+            rate: line.rate,
+            amount: line.amount,
+            lineType: line.type,
+            sortOrder: line.order,
+          }));
+        });
+
+        if (lineRows.length > 0) {
           await client.query(
             `INSERT INTO payroll_item_lines (payroll_item_id, line_code, line_name, quantity, rate, amount, line_type, sort_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [itemId, line.code, line.name, line.qty, line.rate, line.amount, line.type, line.order]
+             SELECT "payrollItemId", "lineCode", "lineName", quantity, rate, amount, "lineType", "sortOrder"
+             FROM jsonb_to_recordset($1::jsonb) AS line_data(
+               "payrollItemId" uuid,
+               "lineCode" text,
+               "lineName" text,
+               quantity numeric,
+               rate numeric,
+               amount numeric,
+               "lineType" text,
+               "sortOrder" integer
+             )`,
+            [JSON.stringify(lineRows)]
           );
         }
       }

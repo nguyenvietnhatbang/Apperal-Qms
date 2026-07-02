@@ -1,5 +1,4 @@
 import { query, queryOne, transaction } from "@/lib/db";
-import { SalaryConfigService } from "@/features/employees/services/salary-config-service";
 import { PayrollRuleService } from "@/features/payroll/services/payroll-rule-service";
 import {
   AuditRuleConfig,
@@ -128,6 +127,7 @@ export class AuditService {
       }
 
       let adjustedRows = 0;
+      const auditRows: any[] = [];
       for (const source of sourceRes.rows) {
         const audited = auditDailyAttendance(
           {
@@ -158,6 +158,43 @@ export class AuditService {
         employeeYearTotals.set(employeeCode, yearTotal + cappedOvertime);
         if (reasons.length > 0) adjustedRows++;
 
+        auditRows.push({
+          sourceAttendanceRecordId: source.id,
+          employeeId: source.employee_id,
+          employeeCode,
+          employeeName: source.employee_name,
+          workDate: source.work_date,
+          weekdayName: source.weekday_name,
+          departmentName: source.department_name,
+          positionTitle: source.position_title,
+          shiftName: source.shift_name,
+          checkIn1: source.check_in_1,
+          checkOut1: source.check_out_1,
+          checkIn2: source.check_in_2,
+          checkOut2: source.check_out_2,
+          checkIn3: source.check_in_3,
+          checkOut3: source.check_out_3,
+          originalWorkdayCount: source.workday_count,
+          originalWorkHours: source.work_hours,
+          originalOvertimeNormalHours: source.overtime_normal_hours,
+          originalOvertimeSundayHours: source.overtime_sunday_hours,
+          originalOvertimeHolidayHours: source.overtime_holiday_hours,
+          workdayCount: audited.workdayCount,
+          workHours: audited.workHours,
+          overtimeNormalHours: cappedOvertime,
+          overtimeSundayHours: audited.overtimeSundayHours,
+          overtimeHolidayHours: audited.overtimeHolidayHours,
+          lateMinutes: source.late_minutes,
+          earlyLeaveMinutes: source.early_leave_minutes,
+          symbol: source.symbol,
+          extraSymbol: source.extra_symbol,
+          totalHours: source.total_hours,
+          adjustmentReason: reasons,
+          note: reasons.join(" "),
+        });
+      }
+
+      if (auditRows.length > 0) {
         await client.query(
           `INSERT INTO audit_attendance_records (
              payroll_cycle_id, source_attendance_record_id, audit_config_id, employee_id, employee_code, employee_name,
@@ -167,44 +204,48 @@ export class AuditService {
              workday_count, work_hours, overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours,
              late_minutes, early_leave_minutes, symbol, extra_symbol, total_hours, adjustment_reason, note
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                   $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)`,
-          [
-            cycleId,
-            source.id,
-            config.id,
-            source.employee_id,
-            employeeCode,
-            source.employee_name,
-            source.work_date,
-            source.weekday_name,
-            source.department_name,
-            source.position_title,
-            source.shift_name,
-            source.check_in_1,
-            source.check_out_1,
-            source.check_in_2,
-            source.check_out_2,
-            source.check_in_3,
-            source.check_out_3,
-            source.workday_count,
-            source.work_hours,
-            source.overtime_normal_hours,
-            source.overtime_sunday_hours,
-            source.overtime_holiday_hours,
-            audited.workdayCount,
-            audited.workHours,
-            cappedOvertime,
-            audited.overtimeSundayHours,
-            audited.overtimeHolidayHours,
-            source.late_minutes,
-            source.early_leave_minutes,
-            source.symbol,
-            source.extra_symbol,
-            source.total_hours,
-            JSON.stringify(reasons),
-            reasons.join(" "),
-          ]
+           SELECT
+             $1, "sourceAttendanceRecordId", $2, "employeeId", "employeeCode", "employeeName",
+             "workDate", "weekdayName", "departmentName", "positionTitle", "shiftName", "checkIn1", "checkOut1",
+             "checkIn2", "checkOut2", "checkIn3", "checkOut3", "originalWorkdayCount", "originalWorkHours",
+             "originalOvertimeNormalHours", "originalOvertimeSundayHours", "originalOvertimeHolidayHours",
+             "workdayCount", "workHours", "overtimeNormalHours", "overtimeSundayHours", "overtimeHolidayHours",
+             "lateMinutes", "earlyLeaveMinutes", symbol, "extraSymbol", "totalHours", "adjustmentReason", note
+           FROM jsonb_to_recordset($3::jsonb) AS audit_data(
+             "sourceAttendanceRecordId" uuid,
+             "employeeId" uuid,
+             "employeeCode" text,
+             "employeeName" text,
+             "workDate" date,
+             "weekdayName" text,
+             "departmentName" text,
+             "positionTitle" text,
+             "shiftName" text,
+             "checkIn1" time,
+             "checkOut1" time,
+             "checkIn2" time,
+             "checkOut2" time,
+             "checkIn3" time,
+             "checkOut3" time,
+             "originalWorkdayCount" numeric,
+             "originalWorkHours" numeric,
+             "originalOvertimeNormalHours" numeric,
+             "originalOvertimeSundayHours" numeric,
+             "originalOvertimeHolidayHours" numeric,
+             "workdayCount" numeric,
+             "workHours" numeric,
+             "overtimeNormalHours" numeric,
+             "overtimeSundayHours" numeric,
+             "overtimeHolidayHours" numeric,
+             "lateMinutes" integer,
+             "earlyLeaveMinutes" integer,
+             symbol text,
+             "extraSymbol" text,
+             "totalHours" numeric,
+             "adjustmentReason" jsonb,
+             note text
+           )`,
+          [cycleId, config.id, JSON.stringify(auditRows)]
         );
       }
 
@@ -262,48 +303,69 @@ export class AuditService {
          WHERE deleted_at IS NULL AND status = 'active'
          ORDER BY employee_code ASC`
       );
+      const employeeIds = employeesRes.rows.map((employee: any) => employee.id);
 
       await client.query(`DELETE FROM audit_payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
       const periodEndStr = new Date(cycle.period_end).toISOString().split("T")[0];
+      const salaryConfigsRes = employeeIds.length > 0
+        ? await client.query(
+            `SELECT DISTINCT ON (employee_id)
+                    id, employee_id as "employeeId", effective_from as "effectiveFrom", effective_to as "effectiveTo",
+                    total_salary as "totalSalary", insurance_salary as "insuranceSalary", base_salary as "baseSalary",
+                    position_allowance as "positionAllowance", responsibility_allowance as "responsibilityAllowance",
+                    seniority_allowance as "seniorityAllowance", safety_allowance as "safetyAllowance",
+                    phone_allowance as "phoneAllowance", travel_allowance as "travelAllowance",
+                    housing_allowance as "housingAllowance", attendance_bonus as "attendanceBonus",
+                    other_bonus as "otherBonus", meal_allowance as "mealAllowance", note
+             FROM employee_salary_configs
+             WHERE employee_id = ANY($1::uuid[])
+               AND effective_from <= $2::date
+               AND (effective_to IS NULL OR effective_to >= $2::date)
+             ORDER BY employee_id, effective_from DESC`,
+            [employeeIds, periodEndStr]
+          )
+        : { rows: [] };
+      const salaryConfigByEmployeeId = new Map<string, any>(
+        salaryConfigsRes.rows.map((salaryConfig: any) => [salaryConfig.employeeId, salaryConfig])
+      );
+
+      const attendanceTotalsRes = employeeIds.length > 0
+        ? await client.query(
+            `SELECT employee_id as "employeeId",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN', 'P') THEN 1 ELSE 0 END), 0) as "paidLeaveDays",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L', 'LE') THEN 1 ELSE 0 END), 0) as "holidayDays",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('RO', 'KP') THEN 1 ELSE 0 END), 0) as "unpaidLeaveDays",
+                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) NOT IN ('PN', 'P', 'L', 'LE', 'RO', 'KP') THEN workday_count ELSE 0 END), 0) as "actualWorkdays",
+                    COALESCE(SUM(overtime_normal_hours), 0) as "overtimeNormalHours",
+                    COALESCE(SUM(overtime_sunday_hours), 0) as "overtimeSundayHours",
+                    COALESCE(SUM(overtime_holiday_hours), 0) as "overtimeHolidayHours"
+             FROM audit_attendance_records
+             WHERE payroll_cycle_id = $1 AND employee_id = ANY($2::uuid[])
+             GROUP BY employee_id`,
+            [cycleId, employeeIds]
+          )
+        : { rows: [] };
+      const attendanceTotalsByEmployeeId = new Map<string, any>(
+        attendanceTotalsRes.rows.map((attendance: any) => [attendance.employeeId, attendance])
+      );
+      const auditPayrollRows: any[] = [];
+      const auditPayrollLinesByEmployeeId = new Map<string, any[]>();
 
       let calculatedRows = 0;
       for (const emp of employeesRes.rows) {
-        const salaryConfig = await SalaryConfigService.getActiveConfig(emp.id, periodEndStr);
+        const salaryConfig = salaryConfigByEmployeeId.get(emp.id);
         if (!salaryConfig) continue;
 
-        const attendanceRes = await client.query(
-          `SELECT workday_count, overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, symbol
-           FROM audit_attendance_records
-           WHERE payroll_cycle_id = $1 AND employee_id = $2`,
-          [cycleId, emp.id]
-        );
-        if (attendanceRes.rows.length === 0) continue;
+        const attendanceTotals = attendanceTotalsByEmployeeId.get(emp.id);
+        if (!attendanceTotals) continue;
 
-        let actualWorkdays = 0;
-        let paidLeaveDays = 0;
-        let holidayDays = 0;
-        let unpaidLeaveDays = 0;
-        let overtimeNormalHours = 0;
-        let overtimeSundayHours = 0;
-        let overtimeHolidayHours = 0;
-
-        for (const att of attendanceRes.rows) {
-          const workdayVal = toNumber(att.workday_count);
-          const sym = String(att.symbol || "").toUpperCase().trim();
-          if (sym === "PN" || sym === "P") {
-            paidLeaveDays += 1;
-          } else if (sym === "L" || sym === "LE") {
-            holidayDays += 1;
-          } else if (sym === "RO" || sym === "KP") {
-            unpaidLeaveDays += 1;
-          } else {
-            actualWorkdays += workdayVal;
-          }
-
-          overtimeNormalHours += toNumber(att.overtime_normal_hours);
-          overtimeSundayHours += toNumber(att.overtime_sunday_hours);
-          overtimeHolidayHours += toNumber(att.overtime_holiday_hours);
-        }
+        const actualWorkdays = toNumber(attendanceTotals.actualWorkdays);
+        const paidLeaveDays = toNumber(attendanceTotals.paidLeaveDays);
+        const holidayDays = toNumber(attendanceTotals.holidayDays);
+        const unpaidLeaveDays = toNumber(attendanceTotals.unpaidLeaveDays);
+        const overtimeNormalHours = toNumber(attendanceTotals.overtimeNormalHours);
+        const overtimeSundayHours = toNumber(attendanceTotals.overtimeSundayHours);
+        const overtimeHolidayHours = toNumber(attendanceTotals.overtimeHolidayHours);
 
         const totalSalary = toNumber(salaryConfig.totalSalary);
         const insuranceSalary = toNumber(salaryConfig.insuranceSalary);
@@ -353,7 +415,52 @@ export class AuditService {
         const netSalary = grossIncome - totalDeduction;
         const secondPaymentAmount = Math.round(netSalary / 1000) * 1000;
 
-        const itemRes = await client.query(
+        auditPayrollRows.push({
+          employeeId: emp.id,
+          employeeCode: emp.employee_code,
+          employeeName: emp.full_name,
+          salaryConfigSnapshot: salaryConfig,
+          ruleSnapshot: rules,
+          auditConfigSnapshot: config,
+          actualWorkdays,
+          paidLeaveDays,
+          holidayDays,
+          unpaidLeaveDays,
+          overtimeNormalHours,
+          overtimeSundayHours,
+          overtimeHolidayHours,
+          monthlySalaryAmount,
+          paidLeaveAmount,
+          overtimeNormalAmount,
+          overtimeSundayAmount,
+          overtimeHolidayAmount,
+          allowanceAmount: flatAllowanceAmount,
+          grossIncome,
+          companyInsuranceAmount,
+          employeeInsuranceAmount,
+          unionFeeAmount,
+          personalIncomeTaxAmount: pitAmount,
+          advancePayment1: 0,
+          advancePayment2: 0,
+          totalDeduction,
+          netSalary,
+          secondPaymentAmount,
+          note: `Tính lương audit cho chu kỳ ${cycle.code}.`,
+        });
+
+        const lines = [
+          { code: "audit_luong_ngay_cong", name: `Audit lương ngày công (${actualWorkdays} ngày)`, qty: actualWorkdays, rate: dailyRate, amount: monthlySalaryAmount, type: "earning", order: 10 },
+          { code: "audit_luong_phep_le", name: `Audit lương phép, lễ (${paidLeaveDays + holidayDays} ngày)`, qty: paidLeaveDays + holidayDays, rate: dailyLeaveRate, amount: paidLeaveAmount, type: "earning", order: 20 },
+          { code: "audit_tang_ca_1", name: `Audit tăng ca 1 (${overtimeNormalHours}h)`, qty: overtimeNormalHours, rate: hourlyBase * otNormalRate, amount: overtimeNormalAmount, type: "earning", order: 30 },
+          { code: "audit_khau_tru_bhxh", name: "BHXH khấu trừ", qty: empInsRate, rate: insuranceSalary, amount: employeeInsuranceAmount, type: "deduction", order: 100 },
+        ];
+
+        auditPayrollLinesByEmployeeId.set(emp.id, lines);
+        calculatedRows++;
+      }
+
+      if (auditPayrollRows.length > 0) {
+        const insertedItems = await client.query(
           `INSERT INTO audit_payroll_items (
              payroll_cycle_id, employee_id, employee_code, employee_name, salary_config_snapshot, rule_snapshot,
              audit_config_snapshot, actual_workdays, paid_leave_days, holiday_days, unpaid_leave_days,
@@ -363,58 +470,81 @@ export class AuditService {
              personal_income_tax_amount, advance_payment_1, advance_payment_2, total_deduction, net_salary,
              second_payment_amount, note
            )
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-                   $17, $18, $19, $20, $21, $22, $23, $24, $25, 0, 0, $26, $27, $28, $29)
-           RETURNING id`,
-          [
-            cycleId,
-            emp.id,
-            emp.employee_code,
-            emp.full_name,
-            JSON.stringify(salaryConfig),
-            JSON.stringify(rules),
-            JSON.stringify(config),
-            actualWorkdays,
-            paidLeaveDays,
-            holidayDays,
-            unpaidLeaveDays,
-            overtimeNormalHours,
-            overtimeSundayHours,
-            overtimeHolidayHours,
-            monthlySalaryAmount,
-            paidLeaveAmount,
-            overtimeNormalAmount,
-            overtimeSundayAmount,
-            overtimeHolidayAmount,
-            flatAllowanceAmount,
-            grossIncome,
-            companyInsuranceAmount,
-            employeeInsuranceAmount,
-            unionFeeAmount,
-            pitAmount,
-            totalDeduction,
-            netSalary,
-            secondPaymentAmount,
-            `Tính lương audit cho chu kỳ ${cycle.code}.`,
-          ]
+           SELECT
+             $1, "employeeId", "employeeCode", "employeeName", "salaryConfigSnapshot", "ruleSnapshot",
+             "auditConfigSnapshot", "actualWorkdays", "paidLeaveDays", "holidayDays", "unpaidLeaveDays",
+             "overtimeNormalHours", "overtimeSundayHours", "overtimeHolidayHours", "monthlySalaryAmount",
+             "paidLeaveAmount", "overtimeNormalAmount", "overtimeSundayAmount", "overtimeHolidayAmount",
+             "allowanceAmount", "grossIncome", "companyInsuranceAmount", "employeeInsuranceAmount", "unionFeeAmount",
+             "personalIncomeTaxAmount", "advancePayment1", "advancePayment2", "totalDeduction", "netSalary",
+             "secondPaymentAmount", note
+           FROM jsonb_to_recordset($2::jsonb) AS payroll_data(
+             "employeeId" uuid,
+             "employeeCode" text,
+             "employeeName" text,
+             "salaryConfigSnapshot" jsonb,
+             "ruleSnapshot" jsonb,
+             "auditConfigSnapshot" jsonb,
+             "actualWorkdays" numeric,
+             "paidLeaveDays" numeric,
+             "holidayDays" numeric,
+             "unpaidLeaveDays" numeric,
+             "overtimeNormalHours" numeric,
+             "overtimeSundayHours" numeric,
+             "overtimeHolidayHours" numeric,
+             "monthlySalaryAmount" numeric,
+             "paidLeaveAmount" numeric,
+             "overtimeNormalAmount" numeric,
+             "overtimeSundayAmount" numeric,
+             "overtimeHolidayAmount" numeric,
+             "allowanceAmount" numeric,
+             "grossIncome" numeric,
+             "companyInsuranceAmount" numeric,
+             "employeeInsuranceAmount" numeric,
+             "unionFeeAmount" numeric,
+             "personalIncomeTaxAmount" numeric,
+             "advancePayment1" numeric,
+             "advancePayment2" numeric,
+             "totalDeduction" numeric,
+             "netSalary" numeric,
+             "secondPaymentAmount" numeric,
+             note text
+           )
+           RETURNING id, employee_id as "employeeId"`,
+          [cycleId, JSON.stringify(auditPayrollRows)]
         );
 
-        const itemId = itemRes.rows[0].id;
-        const lines = [
-          { code: "audit_luong_ngay_cong", name: `Audit lương ngày công (${actualWorkdays} ngày)`, qty: actualWorkdays, rate: dailyRate, amount: monthlySalaryAmount, type: "earning", order: 10 },
-          { code: "audit_luong_phep_le", name: `Audit lương phép, lễ (${paidLeaveDays + holidayDays} ngày)`, qty: paidLeaveDays + holidayDays, rate: dailyLeaveRate, amount: paidLeaveAmount, type: "earning", order: 20 },
-          { code: "audit_tang_ca_1", name: `Audit tăng ca 1 (${overtimeNormalHours}h)`, qty: overtimeNormalHours, rate: hourlyBase * otNormalRate, amount: overtimeNormalAmount, type: "earning", order: 30 },
-          { code: "audit_khau_tru_bhxh", name: "BHXH khấu trừ", qty: empInsRate, rate: insuranceSalary, amount: employeeInsuranceAmount, type: "deduction", order: 100 },
-        ];
+        const lineRows = insertedItems.rows.flatMap((item: any) => {
+          const lines = auditPayrollLinesByEmployeeId.get(item.employeeId) || [];
+          return lines.map((line) => ({
+            auditPayrollItemId: item.id,
+            lineCode: line.code,
+            lineName: line.name,
+            quantity: line.qty,
+            rate: line.rate,
+            amount: line.amount,
+            lineType: line.type,
+            sortOrder: line.order,
+          }));
+        });
 
-        for (const line of lines) {
+        if (lineRows.length > 0) {
           await client.query(
             `INSERT INTO audit_payroll_item_lines (audit_payroll_item_id, line_code, line_name, quantity, rate, amount, line_type, sort_order)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-            [itemId, line.code, line.name, line.qty, line.rate, line.amount, line.type, line.order]
+             SELECT "auditPayrollItemId", "lineCode", "lineName", quantity, rate, amount, "lineType", "sortOrder"
+             FROM jsonb_to_recordset($1::jsonb) AS line_data(
+               "auditPayrollItemId" uuid,
+               "lineCode" text,
+               "lineName" text,
+               quantity numeric,
+               rate numeric,
+               amount numeric,
+               "lineType" text,
+               "sortOrder" integer
+             )`,
+            [JSON.stringify(lineRows)]
           );
         }
-        calculatedRows++;
       }
 
       await client.query(
