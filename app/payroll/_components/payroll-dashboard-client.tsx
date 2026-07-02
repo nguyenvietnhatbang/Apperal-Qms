@@ -97,6 +97,7 @@ export default function PayrollDashboardClient({
   const [pageEmployees, setPageEmployees] = useState(1);
   const [limitEmployees, setLimitEmployees] = useState(20);
   const [deptFilter, setDeptFilter] = useState("all");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(new Set());
 
   const [pageCycles, setPageCycles] = useState(1);
   const [limitCycles, setLimitCycles] = useState(20);
@@ -127,6 +128,7 @@ export default function PayrollDashboardClient({
 
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const employeeSelectAllRef = useRef<HTMLInputElement>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -138,6 +140,7 @@ export default function PayrollDashboardClient({
   
   const [salaryConfigModalOpen, setSalaryConfigModalOpen] = useState(false);
   const [salaryConfigs, setSalaryConfigs] = useState<any[]>([]);
+  const [bulkSalaryModalOpen, setBulkSalaryModalOpen] = useState(false);
   
   const [cycleModalOpen, setCycleModalOpen] = useState(false);
 
@@ -169,6 +172,11 @@ export default function PayrollDashboardClient({
   const [mealAllowanceForm, setMealAllowanceForm] = useState(0);
   const [salaryNoteForm, setSalaryNoteForm] = useState("");
   const [salaryConfigError, setSalaryConfigError] = useState<string | null>(null);
+  const [bulkSalaryEffectiveFromForm, setBulkSalaryEffectiveFromForm] = useState("");
+  const [bulkSalaryBaseForm, setBulkSalaryBaseForm] = useState(0);
+  const [bulkSalaryPositionAllowanceForm, setBulkSalaryPositionAllowanceForm] = useState(0);
+  const [bulkSalaryNoteForm, setBulkSalaryNoteForm] = useState("");
+  const [bulkSalaryError, setBulkSalaryError] = useState<string | null>(null);
 
   // Cycle Form State
   const [cycleCodeForm, setCycleCodeForm] = useState("");
@@ -480,6 +488,79 @@ export default function PayrollDashboardClient({
       alert("Cập nhật cấu hình lương mới thành công!");
     } catch (err) {
       setSalaryConfigError("Lỗi kết nối.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmployeeSelectionChange = (employeeId: string, checked: boolean) => {
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(employeeId);
+      } else {
+        next.delete(employeeId);
+      }
+      return next;
+    });
+  };
+
+  const openBulkSalaryModal = () => {
+    if (selectedEmployeeIds.size === 0) return;
+    setBulkSalaryEffectiveFromForm(new Date().toISOString().split("T")[0]);
+    setBulkSalaryBaseForm(0);
+    setBulkSalaryPositionAllowanceForm(0);
+    setBulkSalaryNoteForm("");
+    setBulkSalaryError(null);
+    setBulkSalaryModalOpen(true);
+  };
+
+  const handleBulkSalarySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBulkSalaryError(null);
+
+    const employeeIds = Array.from(selectedEmployeeIds);
+    if (employeeIds.length === 0) {
+      setBulkSalaryError("Vui lòng chọn ít nhất một nhân viên.");
+      return;
+    }
+
+    if (!bulkSalaryEffectiveFromForm) {
+      setBulkSalaryError("Vui lòng chọn ngày hiệu lực.");
+      return;
+    }
+
+    if (bulkSalaryBaseForm < 0 || bulkSalaryPositionAllowanceForm < 0) {
+      setBulkSalaryError("CS và PC phải là số không âm.");
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const res = await fetch("/api/employees/salary-configs/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeIds,
+          effectiveFrom: bulkSalaryEffectiveFromForm,
+          insuranceSalary: bulkSalaryBaseForm,
+          baseSalary: bulkSalaryBaseForm,
+          positionAllowance: bulkSalaryPositionAllowanceForm,
+          note: bulkSalaryNoteForm,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setBulkSalaryError(data.error?.message || "Không thể gán lương đồng loạt.");
+        return;
+      }
+
+      setBulkSalaryModalOpen(false);
+      setSelectedEmployeeIds(new Set());
+      await refreshAllData();
+      alert(`Đã gán lương cho ${data.data.updatedCount} nhân viên.`);
+    } catch (err) {
+      setBulkSalaryError("Lỗi kết nối.");
     } finally {
       setIsLoading(false);
     }
@@ -805,6 +886,29 @@ export default function PayrollDashboardClient({
     (pageEmployees - 1) * limitEmployees,
     pageEmployees * limitEmployees
   );
+  const filteredEmployeeIds = filteredEmployees.map((employee) => employee.id);
+  const selectedFilteredEmployeeCount = filteredEmployeeIds.filter((id) => selectedEmployeeIds.has(id)).length;
+  const allFilteredEmployeesSelected = filteredEmployees.length > 0 && selectedFilteredEmployeeCount === filteredEmployees.length;
+  const selectedEmployees = employees.filter((employee) => selectedEmployeeIds.has(employee.id));
+
+  useEffect(() => {
+    if (employeeSelectAllRef.current) {
+      employeeSelectAllRef.current.indeterminate =
+        selectedFilteredEmployeeCount > 0 && !allFilteredEmployeesSelected;
+    }
+  }, [allFilteredEmployeesSelected, selectedFilteredEmployeeCount]);
+
+  const toggleFilteredEmployeeSelection = () => {
+    setSelectedEmployeeIds((current) => {
+      const next = new Set(current);
+      if (allFilteredEmployeesSelected) {
+        filteredEmployeeIds.forEach((id) => next.delete(id));
+      } else {
+        filteredEmployeeIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
 
   const filteredCycles = cycles.filter(c => {
     const matchesSearch = c.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1527,6 +1631,24 @@ export default function PayrollDashboardClient({
                       </select>
                     </div>
                     <div className="flex items-center gap-3">
+                      {selectedEmployeeIds.size > 0 && (
+                        <>
+                          <button
+                            onClick={openBulkSalaryModal}
+                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer shadow-md shadow-emerald-500/10"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            <span>Gán lương đồng loạt ({selectedEmployeeIds.size})</span>
+                          </button>
+                          <button
+                            onClick={() => setSelectedEmployeeIds(new Set())}
+                            className="px-3 py-2 border border-zinc-250 hover:bg-zinc-55 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer bg-white text-zinc-700"
+                          >
+                            <X className="w-4 h-4" />
+                            <span>Bỏ chọn</span>
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => openEmployeeModal()}
                         className="btn-primary bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md shadow-blue-500/10 px-4 py-2 font-semibold text-sm flex items-center gap-2 cursor-pointer transition-colors shrink-0"
@@ -1543,7 +1665,15 @@ export default function PayrollDashboardClient({
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 w-10 text-center">
-                            <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" />
+                            <input
+                              ref={employeeSelectAllRef}
+                              type="checkbox"
+                              checked={allFilteredEmployeesSelected}
+                              onChange={toggleFilteredEmployeeSelection}
+                              disabled={filteredEmployees.length === 0}
+                              aria-label="Chọn tất cả nhân viên theo bộ lọc"
+                              className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                            />
                           </th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[90px]">Mã nhân sự</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[140px]">Họ và Tên</th>
@@ -1565,7 +1695,13 @@ export default function PayrollDashboardClient({
                           paginatedEmployees.map((e) => (
                             <tr key={e.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
                               <td className="px-4 py-2.5 text-center">
-                                <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" />
+                                <input
+                                  type="checkbox"
+                                  checked={selectedEmployeeIds.has(e.id)}
+                                  onChange={(event) => handleEmployeeSelectionChange(e.id, event.target.checked)}
+                                  aria-label={`Chọn nhân viên ${e.employeeCode}`}
+                                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                                />
                               </td>
                               <td className="px-4 py-2.5 font-mono font-bold text-zinc-700">{e.employeeCode}</td>
                               <td className="px-4 py-2.5 font-semibold text-zinc-800">{e.fullName}</td>
@@ -2367,6 +2503,111 @@ export default function PayrollDashboardClient({
                 <button type="submit" disabled={isLoading} className="btn-primary bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm px-4 py-2 font-semibold cursor-pointer shadow-md shadow-blue-500/10 flex items-center gap-2">
                   {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
                   <span>Lưu</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Salary Configuration Dialog */}
+      {bulkSalaryModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-zinc-250 rounded-2xl shadow-xl w-full max-w-xl overflow-hidden animate-zoomIn">
+            <div className="px-6 py-4 border-b border-zinc-150 bg-zinc-50 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-md text-zinc-800">Gán lương đồng loạt</h3>
+                <p className="text-xs text-zinc-400 mt-1 font-semibold">{selectedEmployees.length} nhân viên đã chọn</p>
+              </div>
+              <button onClick={() => setBulkSalaryModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleBulkSalarySubmit}>
+              <div className="p-6 space-y-4 text-sm">
+                {bulkSalaryError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>{bulkSalaryError}</span>
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                  <div className="font-bold mb-1">Phạm vi áp dụng</div>
+                  <div>
+                    Cấu hình mới sẽ được thêm cho toàn bộ nhân viên đang chọn. CS cũng được dùng làm lương đóng bảo hiểm.
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">Hiệu lực từ ngày *</label>
+                  <input
+                    type="date"
+                    value={bulkSalaryEffectiveFromForm}
+                    onChange={(e) => setBulkSalaryEffectiveFromForm(e.target.value)}
+                    className="input rounded-xl border-zinc-250 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">CS *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryBaseForm}
+                      onChange={(e) => setBulkSalaryBaseForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 text-sm text-right font-bold text-zinc-850"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">PC</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryPositionAllowanceForm}
+                      onChange={(e) => setBulkSalaryPositionAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 text-sm text-right font-bold text-zinc-850"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">Ghi chú</label>
+                  <input
+                    type="text"
+                    value={bulkSalaryNoteForm}
+                    onChange={(e) => setBulkSalaryNoteForm(e.target.value)}
+                    placeholder="vd: Gán nhanh CS/PC theo bộ lọc"
+                    className="input rounded-xl border-zinc-250 text-sm"
+                  />
+                </div>
+
+                <div className="max-h-32 overflow-y-auto rounded-xl border border-zinc-200 bg-zinc-50 p-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                    {selectedEmployees.slice(0, 12).map((employee) => (
+                      <div key={employee.id} className="rounded-lg bg-white border border-zinc-150 px-2.5 py-1.5 text-xs">
+                        <span className="font-mono font-bold text-zinc-700">{employee.employeeCode}</span>
+                        <span className="text-zinc-500"> - {employee.fullName}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {selectedEmployees.length > 12 && (
+                    <div className="mt-2 text-xs font-semibold text-zinc-500 px-1">
+                      Và {selectedEmployees.length - 12} nhân viên khác
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-6 py-4 border-t border-zinc-150 bg-zinc-50 flex justify-end gap-3">
+                <button type="button" onClick={() => setBulkSalaryModalOpen(false)} className="btn-secondary rounded-xl text-sm px-4 py-2 font-semibold cursor-pointer">Hủy</button>
+                <button type="submit" disabled={isLoading} className="btn-primary bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm px-4 py-2 font-semibold cursor-pointer shadow-md shadow-emerald-500/10 flex items-center gap-2">
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>Gán lương</span>
                 </button>
               </div>
             </form>

@@ -1,4 +1,4 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne, transaction } from "@/lib/db";
 
 export interface SalaryConfigData {
   id?: string;
@@ -19,6 +19,10 @@ export interface SalaryConfigData {
   otherBonus?: number;
   mealAllowance?: number;
   note?: string | null;
+}
+
+export interface BulkSalaryConfigData extends Omit<SalaryConfigData, "employeeId" | "totalSalary"> {
+  employeeIds: string[];
 }
 
 export class SalaryConfigService {
@@ -116,6 +120,80 @@ export class SalaryConfigService {
         data.note || null,
       ]
     );
+  }
+
+  /**
+   * Create the same salary configuration for many employees in one transaction.
+   */
+  static async createBulkSalaryConfigs(data: BulkSalaryConfigData) {
+    const employeeIds = Array.from(new Set(data.employeeIds));
+    const total = Number(data.baseSalary) +
+      Number(data.positionAllowance || 0) +
+      Number(data.responsibilityAllowance || 0) +
+      Number(data.seniorityAllowance || 0) +
+      Number(data.safetyAllowance || 0) +
+      Number(data.phoneAllowance || 0) +
+      Number(data.travelAllowance || 0) +
+      Number(data.housingAllowance || 0) +
+      Number(data.attendanceBonus || 0) +
+      Number(data.otherBonus || 0) +
+      Number(data.mealAllowance || 0);
+
+    return await transaction(async (client) => {
+      const existingEmployees = await client.query(
+        `SELECT id
+         FROM employees
+         WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
+        [employeeIds]
+      );
+
+      if (existingEmployees.rowCount !== employeeIds.length) {
+        throw new Error("Một số nhân viên được chọn không tồn tại hoặc đã bị xóa.");
+      }
+
+      await client.query(
+        `UPDATE employee_salary_configs
+         SET effective_to = $1::date - INTERVAL '1 day',
+             updated_at = now()
+         WHERE employee_id = ANY($2::uuid[])
+           AND effective_to IS NULL
+           AND effective_from < $1::date`,
+        [data.effectiveFrom, employeeIds]
+      );
+
+      const result = await client.query(
+        `INSERT INTO employee_salary_configs (
+           employee_id, effective_from, effective_to, total_salary, insurance_salary, base_salary,
+           position_allowance, responsibility_allowance, seniority_allowance, safety_allowance,
+           phone_allowance, travel_allowance, housing_allowance, attendance_bonus, other_bonus, meal_allowance, note
+         )
+         SELECT employee_id, $2::date, $3::date, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+         FROM unnest($1::uuid[]) AS employee_id
+         RETURNING id, employee_id as "employeeId", effective_from as "effectiveFrom", effective_to as "effectiveTo",
+                   total_salary as "totalSalary", insurance_salary as "insuranceSalary", base_salary as "baseSalary"`,
+        [
+          employeeIds,
+          data.effectiveFrom,
+          data.effectiveTo || null,
+          total,
+          data.insuranceSalary,
+          data.baseSalary,
+          data.positionAllowance || 0,
+          data.responsibilityAllowance || 0,
+          data.seniorityAllowance || 0,
+          data.safetyAllowance || 0,
+          data.phoneAllowance || 0,
+          data.travelAllowance || 0,
+          data.housingAllowance || 0,
+          data.attendanceBonus || 0,
+          data.otherBonus || 0,
+          data.mealAllowance || 0,
+          data.note || null,
+        ]
+      );
+
+      return result.rows;
+    });
   }
 
   /**
