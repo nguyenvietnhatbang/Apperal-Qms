@@ -9,7 +9,7 @@ import {
   Home, Settings, HelpCircle, Loader2, Calendar, FileSpreadsheet,
   UploadCloud, FileText, CheckCircle2, Lock, Unlock, DollarSign,
   Info, Filter, Printer, Download, ArrowLeft, ChevronsLeft, 
-  ChevronsRight, ChevronLeft, SlidersHorizontal
+  ChevronsRight, ChevronLeft, SlidersHorizontal, RefreshCw
 } from "lucide-react";
 import { formatVND, formatDate, formatDecimal } from "@/lib/format";
 
@@ -658,6 +658,37 @@ export default function PayrollDashboardClient({
       setActiveTab("sheet");
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteImportedAttendance = async () => {
+    if (!selectedCycleId) return;
+    if (selectedCycle?.status === "locked" || selectedCycle?.status === "paid") {
+      alert("Chu kỳ lương này đã khóa hoặc chi trả, không thể xóa dữ liệu chấm công.");
+      return;
+    }
+
+    if (!confirm("Xóa dữ liệu chấm công đã import của chu kỳ này? Bảng lương và dữ liệu audit đã tính từ chấm công này cũng sẽ được xóa.")) return;
+
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/timekeeping/imports?cycleId=${encodeURIComponent(selectedCycleId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error?.message || "Không thể xóa dữ liệu chấm công.");
+        return;
+      }
+
+      alert(`Đã xóa ${data.data.deletedAttendanceRecords || 0} dòng chấm công của chu kỳ.`);
+      await refreshAllData();
+      setActiveTab("attendance");
+    } catch (err) {
+      console.error(err);
+      alert("Không thể xóa dữ liệu chấm công.");
     } finally {
       setIsLoading(false);
     }
@@ -2100,6 +2131,14 @@ export default function PayrollDashboardClient({
                     </div>
                     <div className="flex items-center gap-3">
                       <button
+                        onClick={handleDeleteImportedAttendance}
+                        disabled={!selectedCycleId || selectedCycle?.status === "locked" || selectedCycle?.status === "paid" || selectedCycle?.status === "draft"}
+                        className="px-3 py-2 border border-red-200 hover:bg-red-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer bg-white text-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Xóa chấm công</span>
+                      </button>
+                      <button
                         onClick={() => {
                           if (selectedCycle?.status === "locked" || selectedCycle?.status === "paid") {
                             alert("Chu kỳ lương này đã khóa hoặc chi trả, không thể tải lên chấm công mới.");
@@ -2254,6 +2293,14 @@ export default function PayrollDashboardClient({
                       )}
                     </div>
                     <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => selectedCycleId && handleCalculatePayroll(selectedCycleId)}
+                        disabled={!selectedCycleId || selectedCycle?.status === "draft" || selectedCycle?.status === "locked" || selectedCycle?.status === "paid"}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span>Cập nhật</span>
+                      </button>
                       <button
                         onClick={() => downloadPayrollExcel("standard")}
                         className="px-3 py-2 border border-zinc-250 hover:bg-zinc-55 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer bg-white text-zinc-700"

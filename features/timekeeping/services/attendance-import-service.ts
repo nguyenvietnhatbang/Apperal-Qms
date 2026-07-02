@@ -147,4 +147,80 @@ export class AttendanceImportService {
       [cycleId]
     );
   }
+
+  /**
+   * Delete imported attendance data and dependent payroll outputs for a cycle.
+   */
+  static async deleteCycleImportData(cycleId: string, actorId: string) {
+    return await transaction(async (client) => {
+      const cycleRes = await client.query(
+        `SELECT status FROM payroll_cycles WHERE id = $1`,
+        [cycleId]
+      );
+
+      if (cycleRes.rows.length === 0) {
+        throw new Error("Không tìm thấy chu kỳ lương.");
+      }
+
+      const previousStatus = cycleRes.rows[0].status;
+      if (previousStatus === "locked" || previousStatus === "paid") {
+        throw new Error("Không thể xóa chấm công của chu kỳ đã khóa hoặc đã chi trả.");
+      }
+
+      const auditPayrollRes = await client.query(
+        `DELETE FROM audit_payroll_items WHERE payroll_cycle_id = $1`,
+        [cycleId]
+      );
+      const auditAttendanceRes = await client.query(
+        `DELETE FROM audit_attendance_records WHERE payroll_cycle_id = $1`,
+        [cycleId]
+      );
+      const payrollRes = await client.query(
+        `DELETE FROM payroll_items WHERE payroll_cycle_id = $1`,
+        [cycleId]
+      );
+      const attendanceRes = await client.query(
+        `DELETE FROM attendance_records WHERE payroll_cycle_id = $1`,
+        [cycleId]
+      );
+      const importRes = await client.query(
+        `DELETE FROM attendance_imports WHERE payroll_cycle_id = $1`,
+        [cycleId]
+      );
+
+      await client.query(
+        `UPDATE payroll_cycles
+         SET status = 'draft',
+             calculated_at = NULL,
+             updated_at = now()
+         WHERE id = $1`,
+        [cycleId]
+      );
+
+      await client.query(
+        `INSERT INTO payroll_audit_logs (payroll_cycle_id, actor_user_id, action, previous_status, next_status, payload)
+         VALUES ($1, $2, 'delete_attendance_import_data', $3, 'draft', $4)`,
+        [
+          cycleId,
+          actorId,
+          previousStatus,
+          JSON.stringify({
+            deletedImports: importRes.rowCount || 0,
+            deletedAttendanceRecords: attendanceRes.rowCount || 0,
+            deletedPayrollItems: payrollRes.rowCount || 0,
+            deletedAuditAttendanceRecords: auditAttendanceRes.rowCount || 0,
+            deletedAuditPayrollItems: auditPayrollRes.rowCount || 0,
+          }),
+        ]
+      );
+
+      return {
+        deletedImports: importRes.rowCount || 0,
+        deletedAttendanceRecords: attendanceRes.rowCount || 0,
+        deletedPayrollItems: payrollRes.rowCount || 0,
+        deletedAuditAttendanceRecords: auditAttendanceRes.rowCount || 0,
+        deletedAuditPayrollItems: auditPayrollRes.rowCount || 0,
+      };
+    });
+  }
 }
