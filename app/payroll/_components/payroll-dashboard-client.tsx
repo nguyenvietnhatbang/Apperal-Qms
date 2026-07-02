@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Fragment, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { 
@@ -20,6 +20,52 @@ interface PayrollDashboardClientProps {
   initialRules: any[];
 }
 
+const payrollRuleGroups = [
+  {
+    id: "attendance",
+    title: "Ngày công & quy đổi",
+    description: "Thiết lập nền tảng để quy đổi ngày công, giờ công và đơn giá lương.",
+    matches: (code: string) => code.includes("standard_hours") || code.includes("workday"),
+  },
+  {
+    id: "overtime",
+    title: "Hệ số tăng ca",
+    description: "Các hệ số dùng khi tính tiền tăng ca ngày thường, Chủ Nhật và ngày lễ.",
+    matches: (code: string) => code.includes("overtime"),
+  },
+  {
+    id: "employee_deductions",
+    title: "Khấu trừ nhân viên",
+    description: "Tỷ lệ trừ vào lương người lao động như bảo hiểm và đoàn phí.",
+    matches: (code: string) => code.startsWith("employee_"),
+  },
+  {
+    id: "company_contributions",
+    title: "Khoản công ty đóng",
+    description: "Tỷ lệ chi phí doanh nghiệp đóng thêm ngoài phần lương thực nhận.",
+    matches: (code: string) => code.startsWith("company_"),
+  },
+  {
+    id: "other",
+    title: "Quy tắc khác",
+    description: "Các cấu hình bổ sung chưa thuộc nhóm cố định.",
+    matches: () => true,
+  },
+];
+
+const getRuleUnitLabel = (unit: string) => {
+  switch (unit) {
+    case "percent":
+      return "Tỷ lệ";
+    case "multiplier":
+      return "Hệ số";
+    case "hours":
+      return "Giờ";
+    default:
+      return unit;
+  }
+};
+
 export default function PayrollDashboardClient({
   currentUser,
   initialCycles,
@@ -27,7 +73,10 @@ export default function PayrollDashboardClient({
   initialRules,
 }: PayrollDashboardClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "sheet">("employees");
+  const isAuditOnlyUser = currentUser.username === "admin2";
+  const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
+    isAuditOnlyUser ? "auditAttendance" : "employees"
+  );
   const [cycles, setCycles] = useState(initialCycles);
   const [employees, setEmployees] = useState(initialEmployees);
   const [rules, setRules] = useState(initialRules);
@@ -38,6 +87,9 @@ export default function PayrollDashboardClient({
   // Clean Attendance Records & Payroll Sheet State
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
   const [payrollSheetItems, setPayrollSheetItems] = useState<any[]>([]);
+  const [auditConfig, setAuditConfig] = useState<any>(null);
+  const [auditAttendanceRecords, setAuditAttendanceRecords] = useState<any[]>([]);
+  const [auditPayrollSheetItems, setAuditPayrollSheetItems] = useState<any[]>([]);
   const [activePayslip, setActivePayslip] = useState<any>(null);
   const [payslipModalOpen, setPayslipModalOpen] = useState(false);
 
@@ -56,6 +108,12 @@ export default function PayrollDashboardClient({
   const [pageSheet, setPageSheet] = useState(1);
   const [limitSheet, setLimitSheet] = useState(20);
 
+  const [pageAuditAttendance, setPageAuditAttendance] = useState(1);
+  const [limitAuditAttendance, setLimitAuditAttendance] = useState(20);
+
+  const [pageAuditSheet, setPageAuditSheet] = useState(1);
+  const [limitAuditSheet, setLimitAuditSheet] = useState(20);
+
   // Reset pagination & search when tab switches
   useEffect(() => {
     setSearchTerm("");
@@ -63,6 +121,8 @@ export default function PayrollDashboardClient({
     setPageCycles(1);
     setPageAttendance(1);
     setPageSheet(1);
+    setPageAuditAttendance(1);
+    setPageAuditSheet(1);
   }, [activeTab]);
 
   // File Upload State
@@ -119,6 +179,14 @@ export default function PayrollDashboardClient({
   const [cycleNoteForm, setCycleNoteForm] = useState("");
   const [cycleFormError, setCycleFormError] = useState<string | null>(null);
 
+  const [auditDayLimitForm, setAuditDayLimitForm] = useState(4);
+  const [auditMonthLimitForm, setAuditMonthLimitForm] = useState(40);
+  const [auditYearLimitForm, setAuditYearLimitForm] = useState(300);
+  const [auditAllowSundayForm, setAuditAllowSundayForm] = useState(false);
+  const [auditEnableTier2Form, setAuditEnableTier2Form] = useState(false);
+  const [auditNoteForm, setAuditNoteForm] = useState("");
+  const [auditConfigStatus, setAuditConfigStatus] = useState<string | null>(null);
+
   // Selected Cycle helper object
   const selectedCycle = cycles.find(c => c.id === selectedCycleId);
 
@@ -127,8 +195,14 @@ export default function PayrollDashboardClient({
     if (selectedCycleId) {
       loadAttendanceRecords();
       loadPayrollSheet();
+      loadAuditAttendanceRecords();
+      loadAuditPayrollSheet();
     }
   }, [selectedCycleId]);
+
+  useEffect(() => {
+    loadAuditConfig();
+  }, []);
 
   const loadAttendanceRecords = async () => {
     if (!selectedCycleId) return;
@@ -156,6 +230,50 @@ export default function PayrollDashboardClient({
     }
   };
 
+  const loadAuditConfig = async () => {
+    try {
+      const res = await fetch("/api/audit/config");
+      const data = await res.json();
+      if (data.success) {
+        setAuditConfig(data.data);
+        setAuditDayLimitForm(Number(data.data.maxOvertimeHoursPerDay || 4));
+        setAuditMonthLimitForm(Number(data.data.maxOvertimeHoursPerMonth || 40));
+        setAuditYearLimitForm(Number(data.data.maxOvertimeHoursPerYear || 300));
+        setAuditAllowSundayForm(Boolean(data.data.allowSundayWork));
+        setAuditEnableTier2Form(Boolean(data.data.enableOvertimeTier2));
+        setAuditNoteForm(data.data.note || "");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadAuditAttendanceRecords = async () => {
+    if (!selectedCycleId) return;
+    try {
+      const res = await fetch(`/api/audit/attendance?cycleId=${selectedCycleId}`);
+      const data = await res.json();
+      if (data.success) {
+        setAuditAttendanceRecords(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadAuditPayrollSheet = async () => {
+    if (!selectedCycleId) return;
+    try {
+      const res = await fetch(`/api/audit/payroll-items?cycleId=${selectedCycleId}`);
+      const data = await res.json();
+      if (data.success) {
+        setAuditPayrollSheetItems(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const refreshAllData = async () => {
     setIsLoading(true);
     try {
@@ -171,9 +289,13 @@ export default function PayrollDashboardClient({
       const ruData = await ruRes.json();
       if (ruData.success) setRules(ruData.data);
 
+      await loadAuditConfig();
+
       if (selectedCycleId) {
         await loadAttendanceRecords();
         await loadPayrollSheet();
+        await loadAuditAttendanceRecords();
+        await loadAuditPayrollSheet();
       }
     } catch (error) {
       console.error(error);
@@ -460,6 +582,59 @@ export default function PayrollDashboardClient({
     }
   };
 
+  const handleRunAudit = async (cycleId: string) => {
+    if (!cycleId) return;
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/audit/cycles/${cycleId}/run`, { method: "POST" });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error?.message || "Lỗi chạy audit");
+        return;
+      }
+      await loadAuditAttendanceRecords();
+      await loadAuditPayrollSheet();
+      setActiveTab("auditSheet");
+    } catch (err) {
+      console.error(err);
+      alert("Không thể chạy audit.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAuditConfigSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuditConfigStatus(null);
+    try {
+      setIsLoading(true);
+      const res = await fetch("/api/audit/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          maxOvertimeHoursPerDay: auditDayLimitForm,
+          maxOvertimeHoursPerMonth: auditMonthLimitForm,
+          maxOvertimeHoursPerYear: auditYearLimitForm,
+          allowSundayWork: auditAllowSundayForm,
+          enableOvertimeTier2: auditEnableTier2Form,
+          note: auditNoteForm,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setAuditConfigStatus(data.error?.message || "Không cập nhật được cấu hình audit.");
+        return;
+      }
+      setAuditConfig(data.data);
+      setAuditConfigStatus("Đã lưu cấu hình audit.");
+    } catch (err) {
+      console.error(err);
+      setAuditConfigStatus("Lỗi kết nối khi lưu cấu hình audit.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCycleStatusChange = async (cycleId: string, status: string, msg: string) => {
     if (!confirm(msg)) return;
     try {
@@ -639,6 +814,32 @@ export default function PayrollDashboardClient({
     pageSheet * limitSheet
   );
 
+  const filteredAuditRecords = auditAttendanceRecords.filter(r => {
+    const matchesSearch = r.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      r.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDept = deptFilter === "all" || r.departmentName === deptFilter;
+    return matchesSearch && matchesDept;
+  });
+
+  const paginatedAuditRecords = filteredAuditRecords.slice(
+    (pageAuditAttendance - 1) * limitAuditAttendance,
+    pageAuditAttendance * limitAuditAttendance
+  );
+
+  const filteredAuditSheet = auditPayrollSheetItems.filter(i => {
+    const matchesSearch = i.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
+    const emp = employees.find(e => e.id === i.employeeId);
+    const empDept = emp?.departmentName || "";
+    const matchesDept = deptFilter === "all" || empDept === deptFilter;
+    return matchesSearch && matchesDept;
+  });
+
+  const paginatedAuditSheet = filteredAuditSheet.slice(
+    (pageAuditSheet - 1) * limitAuditSheet,
+    pageAuditSheet * limitAuditSheet
+  );
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "draft":
@@ -669,57 +870,91 @@ export default function PayrollDashboardClient({
               CF
             </div>
             <div>
-              <h2 className="text-sm font-bold tracking-tight text-zinc-800">Cẩm Thiên Group</h2>
+              <h2 className="text-sm font-bold tracking-tight text-zinc-800">Aparel</h2>
               <p className="text-xs text-zinc-400">Hệ thống nội bộ</p>
             </div>
           </div>
 
           {/* Nav Links */}
           <nav className="p-4 space-y-1">
+            {!isAuditOnlyUser && (
+              <>
+                <button
+                  onClick={() => { setActiveTab("employees"); setSearchTerm(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                    activeTab === "employees" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  }`}
+                >
+                  <Users className="w-5 h-5" />
+                  <span>Nhân sự & Lương riêng</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("rules"); setSearchTerm(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                    activeTab === "rules" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  }`}
+                >
+                  <Settings className="w-5 h-5" />
+                  <span>Cấu hình quy tắc chung</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("cycles"); setSearchTerm(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                    activeTab === "cycles" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  }`}
+                >
+                  <Calendar className="w-5 h-5" />
+                  <span>Chu kỳ lương</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("attendance"); setSearchTerm(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                    activeTab === "attendance" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  }`}
+                >
+                  <FileSpreadsheet className="w-5 h-5" />
+                  <span>Chấm công gốc</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("sheet"); setSearchTerm(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                    activeTab === "sheet" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  }`}
+                >
+                  <FileText className="w-5 h-5" />
+                  <span>Bảng lương gốc</span>
+                </button>
+                <div className="pt-3 mt-3 border-t border-zinc-150 text-[10px] font-bold uppercase tracking-wider text-zinc-400 px-3">
+                  Audit
+                </div>
+              </>
+            )}
             <button
-              onClick={() => { setActiveTab("employees"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("auditConfig"); setSearchTerm(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "employees" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                activeTab === "auditConfig" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
             >
-              <Users className="w-5 h-5" />
-              <span>Nhân sự & Lương riêng</span>
+              <SlidersHorizontal className="w-5 h-5" />
+              <span>Cấu hình audit</span>
             </button>
             <button
-              onClick={() => { setActiveTab("rules"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("auditAttendance"); setSearchTerm(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "rules" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
-              }`}
-            >
-              <Settings className="w-5 h-5" />
-              <span>Cấu hình quy tắc chung</span>
-            </button>
-            <button
-              onClick={() => { setActiveTab("cycles"); setSearchTerm(""); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "cycles" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
-              }`}
-            >
-              <Calendar className="w-5 h-5" />
-              <span>Chu kỳ lương</span>
-            </button>
-            <button
-              onClick={() => { setActiveTab("attendance"); setSearchTerm(""); }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "attendance" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                activeTab === "auditAttendance" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
             >
               <FileSpreadsheet className="w-5 h-5" />
-              <span>Chấm công</span>
+              <span>Chấm công audit</span>
             </button>
             <button
-              onClick={() => { setActiveTab("sheet"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("auditSheet"); setSearchTerm(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "sheet" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                activeTab === "auditSheet" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
             >
               <FileText className="w-5 h-5" />
-              <span>Bảng lương tổng hợp</span>
+              <span>Bảng lương audit</span>
             </button>
           </nav>
         </div>
@@ -800,6 +1035,355 @@ export default function PayrollDashboardClient({
 
           {/* Tab Views Card */}
           <div className="flex-1 flex flex-col min-h-0 bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+            {activeTab === "auditConfig" && (
+              <form onSubmit={handleAuditConfigSubmit} className="flex-1 flex flex-col min-h-0">
+                <div className="px-6 py-4 border-b border-zinc-150 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white">
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-850">Cấu hình audit bảng số 1</h3>
+                    <p className="text-xs text-zinc-500 mt-1">Cấu hình này chỉ sinh dữ liệu audit, không sửa bảng chấm công và bảng lương gốc.</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Chạy audit kỳ này</span>
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
+                    >
+                      <Check className="w-4 h-4" />
+                      <span>Lưu cấu hình</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-auto p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
+                    <div className="border border-zinc-200 rounded-lg p-4 bg-white">
+                      <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">TC1 tối đa / ngày</label>
+                      <input
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        value={auditDayLimitForm}
+                        onChange={(e) => setAuditDayLimitForm(Number(e.target.value))}
+                        className="input rounded-xl border-zinc-250 text-sm font-bold"
+                      />
+                      <p className="text-xs text-zinc-500 mt-2">Nếu vượt mức này, audit trừ từng block để lấy số lẻ còn lại.</p>
+                    </div>
+                    <div className="border border-zinc-200 rounded-lg p-4 bg-white">
+                      <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">TC1 tối đa / tháng</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={auditMonthLimitForm}
+                        onChange={(e) => setAuditMonthLimitForm(Number(e.target.value))}
+                        className="input rounded-xl border-zinc-250 text-sm font-bold"
+                      />
+                      <p className="text-xs text-zinc-500 mt-2">Mặc định 40h/tháng theo yêu cầu khách.</p>
+                    </div>
+                    <div className="border border-zinc-200 rounded-lg p-4 bg-white">
+                      <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">TC1 tối đa / năm</label>
+                      <input
+                        type="number"
+                        step="1"
+                        min="0"
+                        value={auditYearLimitForm}
+                        onChange={(e) => setAuditYearLimitForm(Number(e.target.value))}
+                        className="input rounded-xl border-zinc-250 text-sm font-bold"
+                      />
+                      <p className="text-xs text-zinc-500 mt-2">Mặc định 300h/năm theo yêu cầu khách.</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-5xl">
+                    <label className="border border-zinc-200 rounded-lg p-4 flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={auditAllowSundayForm}
+                        onChange={(e) => setAuditAllowSundayForm(e.target.checked)}
+                        className="mt-1 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-bold text-zinc-800">Cho phép công Chủ Nhật</span>
+                        <span className="block text-xs text-zinc-500 mt-1">Tắt mặc định: audit sẽ đưa công và tăng ca Chủ Nhật về 0.</span>
+                      </span>
+                    </label>
+                    <label className="border border-zinc-200 rounded-lg p-4 flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={auditEnableTier2Form}
+                        onChange={(e) => setAuditEnableTier2Form(e.target.checked)}
+                        className="mt-1 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-bold text-zinc-800">Bật tăng ca 2 trong audit</span>
+                        <span className="block text-xs text-zinc-500 mt-1">Tắt mặc định: TC2 được đưa về TC1 trước khi áp dụng giới hạn.</span>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="mt-5 max-w-5xl">
+                    <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">Ghi chú cấu hình</label>
+                    <textarea
+                      value={auditNoteForm}
+                      onChange={(e) => setAuditNoteForm(e.target.value)}
+                      rows={4}
+                      className="input rounded-xl border-zinc-250 text-sm"
+                    />
+                  </div>
+
+                  <div className="mt-5 max-w-5xl rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                    <div className="font-bold mb-1">Cấu hình đang dùng: {auditConfig?.name || "Audit bảng số 1"}</div>
+                    <div>Ví dụ TC1 = 9h, giới hạn ngày = 4h: audit trừ 4h còn 5h, vẫn lớn hơn 4h nên trừ tiếp, còn 1h để tính lương audit.</div>
+                  </div>
+
+                  {auditConfigStatus && (
+                    <div className="mt-4 max-w-5xl text-sm font-semibold text-blue-700">{auditConfigStatus}</div>
+                  )}
+                </div>
+              </form>
+            )}
+
+            {activeTab === "auditAttendance" && (() => {
+              const totalItems = filteredAuditRecords.length;
+              const totalPages = Math.ceil(totalItems / limitAuditAttendance) || 1;
+              return (
+                <>
+                  <div className="px-6 py-4 border-b border-zinc-150 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <select
+                        value={selectedCycleId}
+                        onChange={(e) => setSelectedCycleId(e.target.value)}
+                        className="border border-zinc-250 rounded-xl px-3 py-2 text-sm font-semibold bg-white text-zinc-700 outline-none cursor-pointer"
+                      >
+                        {cycles.map(c => (
+                          <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                        ))}
+                      </select>
+                      <select
+                        value={deptFilter}
+                        onChange={(e) => {
+                          setDeptFilter(e.target.value);
+                          setPageAuditAttendance(1);
+                        }}
+                        className="border border-zinc-250 rounded-xl px-3 py-2 text-sm font-semibold bg-white text-zinc-700 outline-none cursor-pointer"
+                      >
+                        <option value="all">Bộ phận (Tất cả)</option>
+                        {uniqueDepartments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Tìm mã, họ tên..."
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setPageAuditAttendance(1);
+                          }}
+                          className="pl-10 pr-4 py-2 bg-white border border-zinc-250 rounded-xl text-sm w-60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Chạy lại audit</span>
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-auto min-h-0">
+                    <table className="w-full min-w-[1180px] text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Mã NV</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Họ Tên</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ngày</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công gốc</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công audit</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 gốc</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC2 gốc</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 audit</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[280px]">Lý do chỉnh</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 text-zinc-650">
+                        {paginatedAuditRecords.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="px-4 py-8 text-center text-zinc-400">Chưa có bảng chấm công audit cho chu kỳ này.</td>
+                          </tr>
+                        ) : (
+                          paginatedAuditRecords.map((r, idx) => (
+                            <tr key={r.id || idx} className="hover:bg-zinc-50/50">
+                              <td className="px-4 py-2.5 font-mono font-bold text-zinc-700">{r.employeeCode}</td>
+                              <td className="px-4 py-2.5 font-semibold text-zinc-850">{r.employeeName}</td>
+                              <td className="px-4 py-2.5">{formatDate(r.workDate)} ({r.weekdayName || "-"})</td>
+                              <td className="px-4 py-2.5 text-center">{formatDecimal(r.originalWorkdayCount, 1)}</td>
+                              <td className="px-4 py-2.5 text-center font-bold text-emerald-650">{formatDecimal(r.workdayCount, 1)}</td>
+                              <td className="px-4 py-2.5 text-center font-mono">{formatDecimal(r.originalOvertimeNormalHours, 1)}h</td>
+                              <td className="px-4 py-2.5 text-center font-mono">{formatDecimal(r.originalOvertimeSundayHours, 1)}h</td>
+                              <td className="px-4 py-2.5 text-center font-mono font-bold text-emerald-700">{formatDecimal(r.overtimeNormalHours, 1)}h</td>
+                              <td className="px-4 py-2.5 text-zinc-500 whitespace-normal">{Array.isArray(r.adjustmentReason) ? r.adjustmentReason.join(" ") : r.note || "-"}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-6 py-3.5 border-t border-zinc-200 flex items-center justify-between shrink-0 bg-zinc-50/50 text-xs text-zinc-500 font-semibold">
+                    <div>Hiển thị {(pageAuditAttendance - 1) * limitAuditAttendance + 1}-{Math.min(pageAuditAttendance * limitAuditAttendance, totalItems)} / Tổng: {totalItems}</div>
+                    <select
+                      value={limitAuditAttendance}
+                      onChange={(e) => {
+                        setLimitAuditAttendance(Number(e.target.value));
+                        setPageAuditAttendance(1);
+                      }}
+                      className="bg-white border border-zinc-250 rounded-lg px-2 py-1 outline-none text-xs text-zinc-700 cursor-pointer font-bold"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPageAuditAttendance(p => Math.max(1, p - 1))} disabled={pageAuditAttendance === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                      <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-md font-bold mx-1">{pageAuditAttendance} / {totalPages}</span>
+                      <button onClick={() => setPageAuditAttendance(p => Math.min(totalPages, p + 1))} disabled={pageAuditAttendance === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            {activeTab === "auditSheet" && (() => {
+              const totalItems = filteredAuditSheet.length;
+              const totalPages = Math.ceil(totalItems / limitAuditSheet) || 1;
+              return (
+                <>
+                  <div className="px-6 py-4 border-b border-zinc-150 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <select
+                        value={selectedCycleId}
+                        onChange={(e) => setSelectedCycleId(e.target.value)}
+                        className="border border-zinc-250 rounded-xl px-3 py-2 text-sm font-semibold bg-white text-zinc-700 outline-none cursor-pointer"
+                      >
+                        {cycles.map(c => (
+                          <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                        ))}
+                      </select>
+                      <select
+                        value={deptFilter}
+                        onChange={(e) => {
+                          setDeptFilter(e.target.value);
+                          setPageAuditSheet(1);
+                        }}
+                        className="border border-zinc-250 rounded-xl px-3 py-2 text-sm font-semibold bg-white text-zinc-700 outline-none cursor-pointer"
+                      >
+                        <option value="all">Bộ phận (Tất cả)</option>
+                        {uniqueDepartments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Tìm mã, họ tên..."
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setPageAuditSheet(1);
+                          }}
+                          className="pl-10 pr-4 py-2 bg-white border border-zinc-250 rounded-xl text-sm w-60 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Tính lại lương audit</span>
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-auto min-h-0">
+                    <table className="w-full min-w-[1180px] text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Mã NV</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[150px]">Họ và Tên</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công audit</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 audit</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC2 audit</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Lương ngày công</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Tiền tăng ca</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Tổng thu nhập</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Khấu trừ</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right font-bold text-zinc-850">Thực nhận audit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 text-zinc-750">
+                        {paginatedAuditSheet.length === 0 ? (
+                          <tr>
+                            <td colSpan={10} className="px-4 py-8 text-center text-zinc-400">Chưa có bảng lương audit cho chu kỳ này.</td>
+                          </tr>
+                        ) : (
+                          paginatedAuditSheet.map((item) => (
+                            <tr key={item.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
+                              <td className="px-4 py-3.5 font-mono font-bold text-zinc-700">{item.employeeCode}</td>
+                              <td className="px-4 py-3.5 font-bold text-zinc-800">{item.employeeName}</td>
+                              <td className="px-4 py-3.5 text-center font-bold text-zinc-700">{formatDecimal(item.actualWorkdays, 1)}</td>
+                              <td className="px-4 py-3.5 text-center font-mono text-emerald-700 font-bold">{formatDecimal(item.overtimeNormalHours, 1)}h</td>
+                              <td className="px-4 py-3.5 text-center font-mono">{formatDecimal(item.overtimeSundayHours, 1)}h</td>
+                              <td className="px-4 py-3.5 text-right font-semibold">{formatVND(item.monthlySalaryAmount)}</td>
+                              <td className="px-4 py-3.5 text-right">{formatVND(parseFloat(item.overtimeNormalAmount) + parseFloat(item.overtimeSundayAmount) + parseFloat(item.overtimeHolidayAmount))}</td>
+                              <td className="px-4 py-3.5 text-right font-bold text-blue-600">{formatVND(item.grossIncome)}</td>
+                              <td className="px-4 py-3.5 text-right text-red-650">{formatVND(item.totalDeduction)}</td>
+                              <td className="px-4 py-3.5 text-right font-bold text-emerald-600 text-sm">{formatVND(item.secondPaymentAmount)}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-6 py-3.5 border-t border-zinc-200 flex items-center justify-between shrink-0 bg-zinc-50/50 text-xs text-zinc-500 font-semibold">
+                    <div>Hiển thị {(pageAuditSheet - 1) * limitAuditSheet + 1}-{Math.min(pageAuditSheet * limitAuditSheet, totalItems)} / Tổng: {totalItems}</div>
+                    <select
+                      value={limitAuditSheet}
+                      onChange={(e) => {
+                        setLimitAuditSheet(Number(e.target.value));
+                        setPageAuditSheet(1);
+                      }}
+                      className="bg-white border border-zinc-250 rounded-lg px-2 py-1 outline-none text-xs text-zinc-700 cursor-pointer font-bold"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPageAuditSheet(p => Math.max(1, p - 1))} disabled={pageAuditSheet === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                      <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-md font-bold mx-1">{pageAuditSheet} / {totalPages}</span>
+                      <button onClick={() => setPageAuditSheet(p => Math.min(totalPages, p + 1))} disabled={pageAuditSheet === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
             {activeTab === "employees" && (() => {
               const totalItems = filteredEmployees.length;
               const totalPages = Math.ceil(totalItems / limitEmployees) || 1;
@@ -848,45 +1432,44 @@ export default function PayrollDashboardClient({
 
                   {/* Table Grid */}
                   <div className="flex-1 overflow-auto min-h-0">
-                    <table className="w-full text-left border-collapse text-xs">
+                    <table className="w-full min-w-[1040px] text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 w-12 text-center">
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 w-10 text-center">
                             <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" />
                           </th>
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[100px]">Mã nhân sự</th>
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[160px]">Họ và Tên</th>
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[80px]">Giới tính</th>
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[180px]">Bộ phận / Chức vụ</th>
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[120px]">Ngày gia nhập</th>
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 text-center min-w-[130px]">Người phụ thuộc</th>
-                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 text-right min-w-[140px]">Lương cấu hình</th>
-                          <th className="px-6 py-3 sticky top-0 right-0 bg-zinc-50 border-b border-zinc-100 border-l border-zinc-100 z-30 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right min-w-[110px]">Thao tác</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[90px]">Mã nhân sự</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[140px]">Họ và Tên</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[70px]">Giới tính</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[130px]">Bộ phận</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[130px]">Chức vụ</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 min-w-[110px]">Ngày gia nhập</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 text-center min-w-[115px]">Người phụ thuộc</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20 text-right min-w-[125px]">Lương cấu hình</th>
+                          <th className="px-4 py-3.5 sticky top-0 right-0 bg-zinc-50 border-b border-zinc-100 border-l border-zinc-100 z-30 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right min-w-[100px]">Thao tác</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 text-sm">
                         {paginatedEmployees.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="px-6 py-8 text-center text-zinc-400">Không tìm thấy nhân viên nào.</td>
+                            <td colSpan={10} className="px-4 py-8 text-center text-zinc-400">Không tìm thấy nhân viên nào.</td>
                           </tr>
                         ) : (
                           paginatedEmployees.map((e) => (
                             <tr key={e.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
-                              <td className="px-6 py-2.5 text-center">
+                              <td className="px-4 py-2.5 text-center">
                                 <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" />
                               </td>
-                              <td className="px-6 py-2.5 font-mono font-bold text-zinc-700">{e.employeeCode}</td>
-                              <td className="px-6 py-2.5 font-semibold text-zinc-800">{e.fullName}</td>
-                              <td className="px-6 py-2.5 text-zinc-500">{e.gender || "-"}</td>
-                              <td className="px-6 py-2.5">
-                                <span className="font-medium text-zinc-700">{e.departmentName || "-"}</span>
-                                <span className="block text-xs text-zinc-400 mt-0.5">{e.positionTitle || "-"}</span>
-                              </td>
-                              <td className="px-6 py-2.5 text-zinc-500">{e.joinedDate ? formatDate(e.joinedDate) : "-"}</td>
-                              <td className="px-6 py-2.5 text-zinc-500 text-center">
+                              <td className="px-4 py-2.5 font-mono font-bold text-zinc-700">{e.employeeCode}</td>
+                              <td className="px-4 py-2.5 font-semibold text-zinc-800">{e.fullName}</td>
+                              <td className="px-4 py-2.5 text-zinc-500">{e.gender || "-"}</td>
+                              <td className="px-4 py-2.5 font-medium text-zinc-700">{e.departmentName || "-"}</td>
+                              <td className="px-4 py-2.5 text-zinc-500">{e.positionTitle || "-"}</td>
+                              <td className="px-4 py-2.5 text-zinc-500">{e.joinedDate ? formatDate(e.joinedDate) : "-"}</td>
+                              <td className="px-4 py-2.5 text-zinc-500 text-center">
                                 {e.dependentCount || 0} {e.hasChildUnder6 && <span className="block text-[10px] text-emerald-600 font-bold">(Có con &lt; 6t)</span>}
                               </td>
-                              <td className="px-6 py-2.5 text-right">
+                              <td className="px-4 py-2.5 text-right">
                                 <button
                                   onClick={() => openSalaryConfigModal(e)}
                                   className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-500 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1 cursor-pointer"
@@ -895,7 +1478,7 @@ export default function PayrollDashboardClient({
                                   <span>Cấu hình Lương</span>
                                 </button>
                               </td>
-                              <td className="px-6 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
+                              <td className="px-4 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
                                 <div className="flex justify-end gap-2">
                                   <button onClick={() => openEmployeeModal(e)} className="icon-btn hover:text-blue-600 rounded-lg p-1.5 cursor-pointer"><Edit2 className="w-4 h-4" /></button>
                                   <button onClick={() => handleEmployeeDelete(e.id)} className="icon-btn-danger hover:bg-red-50 hover:text-red-700 rounded-lg p-1.5 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
@@ -945,6 +1528,17 @@ export default function PayrollDashboardClient({
                 r.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (r.description && r.description.toLowerCase().includes(searchTerm.toLowerCase()))
               );
+              const groupedRules = payrollRuleGroups.map((group) => {
+                const previousGroups = payrollRuleGroups.slice(0, payrollRuleGroups.findIndex((g) => g.id === group.id));
+                return {
+                  ...group,
+                  rules: filteredRules.filter((rule) => {
+                    const code = rule.code || "";
+                    const isAlreadyGrouped = previousGroups.some((previousGroup) => previousGroup.matches(code));
+                    return !isAlreadyGrouped && group.matches(code);
+                  }),
+                };
+              }).filter(group => group.rules.length > 0);
               return (
                 <>
                   {/* Card Top Toolbar */}
@@ -965,45 +1559,66 @@ export default function PayrollDashboardClient({
 
                   {/* Table Grid */}
                   <div className="flex-1 overflow-auto min-h-0">
-                    <table className="w-full text-left border-collapse text-xs">
+                    <table className="w-full min-w-[980px] text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          <th className="px-6 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[220px]">Tên quy tắc</th>
-                          <th className="px-6 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[120px]">Mã quy tắc</th>
-                          <th className="px-6 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[120px] text-right">Giá trị cấu hình</th>
-                          <th className="px-6 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[90px]">Đơn vị</th>
-                          <th className="px-6 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[320px]">Mô tả chi tiết</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[220px]">Tên quy tắc</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[220px]">Mã quy tắc</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[130px] text-right">Giá trị cấu hình</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[100px]">Đơn vị</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[300px]">Mô tả chi tiết</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 text-zinc-750">
                         {filteredRules.length === 0 ? (
                           <tr>
-                            <td colSpan={5} className="px-6 py-8 text-center text-zinc-400">Không tìm thấy quy tắc nào.</td>
+                            <td colSpan={5} className="px-5 py-8 text-center text-zinc-400">Không tìm thấy quy tắc nào.</td>
                           </tr>
                         ) : (
-                          filteredRules.map((rule) => (
-                            <tr key={rule.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap align-middle">
-                              <td className="px-6 py-4 font-semibold text-zinc-800 whitespace-normal">{rule.name}</td>
-                              <td className="px-6 py-4 font-mono font-bold text-zinc-650">{rule.code}</td>
-                              <td className="px-6 py-4 text-right">
-                                <input
-                                  type="number"
-                                  step="any"
-                                  defaultValue={rule.value}
-                                  onBlur={(e) => {
-                                    const val = parseFloat(e.target.value);
-                                    if (!isNaN(val) && val !== parseFloat(rule.value)) {
-                                      handleRuleUpdate(rule.id, rule.code, val);
-                                    }
-                                  }}
-                                  className="w-24 text-right border border-zinc-250 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-850 focus:border-blue-500 outline-none"
-                                />
-                              </td>
-                              <td className="px-6 py-4 font-semibold text-zinc-500">{rule.unit}</td>
-                              <td className="px-6 py-4 text-zinc-400 whitespace-normal text-xs" title={rule.description}>
-                                {rule.description}
-                              </td>
-                            </tr>
+                          groupedRules.map((group) => (
+                            <Fragment key={group.id}>
+                              <tr className="bg-zinc-100/80">
+                                <td colSpan={5} className="px-5 py-3 border-y border-zinc-200">
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div>
+                                      <p className="text-xs font-bold uppercase tracking-wider text-zinc-800">{group.title}</p>
+                                      <p className="text-xs text-zinc-500 mt-0.5 normal-case tracking-normal">{group.description}</p>
+                                    </div>
+                                    <span className="shrink-0 rounded-full border border-zinc-250 bg-white px-2.5 py-1 text-[11px] font-bold text-zinc-500">
+                                      {group.rules.length} quy tắc
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                              {group.rules.map((rule) => (
+                                <tr key={rule.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap align-middle">
+                                  <td className="px-5 py-3.5 font-semibold text-zinc-800 whitespace-normal">{rule.name}</td>
+                                  <td className="px-5 py-3.5 font-mono font-bold text-zinc-650 whitespace-normal break-all">{rule.code}</td>
+                                  <td className="px-5 py-3.5 text-right">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      defaultValue={rule.value}
+                                      onBlur={(e) => {
+                                        const val = parseFloat(e.target.value);
+                                        if (!isNaN(val) && val !== parseFloat(rule.value)) {
+                                          handleRuleUpdate(rule.id, rule.code, val);
+                                        }
+                                      }}
+                                      className="w-24 text-right border border-zinc-250 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-850 focus:border-blue-500 outline-none"
+                                    />
+                                  </td>
+                                  <td className="px-5 py-3.5">
+                                    <span className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] font-bold text-zinc-600">
+                                      {getRuleUnitLabel(rule.unit)}
+                                    </span>
+                                  </td>
+                                  <td className="px-5 py-3.5 text-zinc-500 whitespace-normal text-xs leading-relaxed" title={rule.description}>
+                                    {rule.description}
+                                  </td>
+                                </tr>
+                              ))}
+                            </Fragment>
                           ))
                         )}
                       </tbody>

@@ -359,7 +359,7 @@ export default function AuthDashboardClient({
               CF
             </div>
             <div>
-              <h2 className="text-sm font-bold tracking-tight text-zinc-800">Cẩm Thiên Group</h2>
+              <h2 className="text-sm font-bold tracking-tight text-zinc-800">Aparel</h2>
               <p className="text-xs text-zinc-400">Hệ thống nội bộ</p>
             </div>
           </div>

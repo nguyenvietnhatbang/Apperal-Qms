@@ -286,6 +286,114 @@ CREATE TABLE IF NOT EXISTS payroll_audit_logs (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS audit_configs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  code varchar(80) NOT NULL UNIQUE,
+  name varchar(150) NOT NULL,
+  max_overtime_hours_per_day numeric(8,2) NOT NULL DEFAULT 4,
+  max_overtime_hours_per_month numeric(8,2) NOT NULL DEFAULT 40,
+  max_overtime_hours_per_year numeric(8,2) NOT NULL DEFAULT 300,
+  allow_sunday_work boolean NOT NULL DEFAULT false,
+  enable_overtime_tier_2 boolean NOT NULL DEFAULT false,
+  note text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS audit_attendance_records (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  payroll_cycle_id uuid NOT NULL REFERENCES payroll_cycles(id) ON DELETE CASCADE,
+  source_attendance_record_id uuid REFERENCES attendance_records(id) ON DELETE SET NULL,
+  audit_config_id uuid REFERENCES audit_configs(id) ON DELETE SET NULL,
+  employee_id uuid REFERENCES employees(id) ON DELETE SET NULL,
+  employee_code varchar(50) NOT NULL,
+  employee_name varchar(180) NOT NULL,
+  work_date date NOT NULL,
+  weekday_name varchar(30),
+  department_name varchar(150),
+  position_title varchar(150),
+  shift_name varchar(80),
+  check_in_1 time,
+  check_out_1 time,
+  check_in_2 time,
+  check_out_2 time,
+  check_in_3 time,
+  check_out_3 time,
+  original_workday_count numeric(8,2) NOT NULL DEFAULT 0,
+  original_work_hours numeric(8,2) NOT NULL DEFAULT 0,
+  original_overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
+  original_overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  original_overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  workday_count numeric(8,2) NOT NULL DEFAULT 0,
+  work_hours numeric(8,2) NOT NULL DEFAULT 0,
+  overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
+  overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  late_minutes integer NOT NULL DEFAULT 0,
+  early_leave_minutes integer NOT NULL DEFAULT 0,
+  symbol varchar(50),
+  extra_symbol varchar(50),
+  total_hours numeric(8,2) NOT NULL DEFAULT 0,
+  adjustment_reason jsonb NOT NULL DEFAULT '[]'::jsonb,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (payroll_cycle_id, employee_code, work_date)
+);
+
+CREATE TABLE IF NOT EXISTS audit_payroll_items (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  payroll_cycle_id uuid NOT NULL REFERENCES payroll_cycles(id) ON DELETE CASCADE,
+  employee_id uuid REFERENCES employees(id) ON DELETE SET NULL,
+  employee_code varchar(50) NOT NULL,
+  employee_name varchar(180) NOT NULL,
+  salary_config_snapshot jsonb NOT NULL,
+  rule_snapshot jsonb NOT NULL,
+  audit_config_snapshot jsonb NOT NULL,
+  actual_workdays numeric(8,2) NOT NULL DEFAULT 0,
+  paid_leave_days numeric(8,2) NOT NULL DEFAULT 0,
+  holiday_days numeric(8,2) NOT NULL DEFAULT 0,
+  unpaid_leave_days numeric(8,2) NOT NULL DEFAULT 0,
+  overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
+  overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  monthly_salary_amount numeric(14,2) NOT NULL DEFAULT 0,
+  paid_leave_amount numeric(14,2) NOT NULL DEFAULT 0,
+  overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0,
+  overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  gross_income numeric(14,2) NOT NULL DEFAULT 0,
+  company_insurance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  employee_insurance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  union_fee_amount numeric(14,2) NOT NULL DEFAULT 0,
+  personal_income_tax_amount numeric(14,2) NOT NULL DEFAULT 0,
+  advance_payment_1 numeric(14,2) NOT NULL DEFAULT 0,
+  advance_payment_2 numeric(14,2) NOT NULL DEFAULT 0,
+  total_deduction numeric(14,2) NOT NULL DEFAULT 0,
+  net_salary numeric(14,2) NOT NULL DEFAULT 0,
+  second_payment_amount numeric(14,2) NOT NULL DEFAULT 0,
+  note text,
+  calculated_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (payroll_cycle_id, employee_code)
+);
+
+CREATE TABLE IF NOT EXISTS audit_payroll_item_lines (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  audit_payroll_item_id uuid NOT NULL REFERENCES audit_payroll_items(id) ON DELETE CASCADE,
+  line_code varchar(80) NOT NULL,
+  line_name varchar(180) NOT NULL,
+  quantity numeric(14,4),
+  rate numeric(14,4),
+  amount numeric(14,2) NOT NULL DEFAULT 0,
+  line_type varchar(30) NOT NULL,
+  sort_order integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_department_permissions_module
   ON department_module_permissions (module_id);
 
@@ -312,6 +420,12 @@ CREATE INDEX IF NOT EXISTS idx_attendance_records_cycle_employee_date
 
 CREATE INDEX IF NOT EXISTS idx_payroll_items_cycle_employee
   ON payroll_items (payroll_cycle_id, employee_code);
+
+CREATE INDEX IF NOT EXISTS idx_audit_attendance_cycle_employee_date
+  ON audit_attendance_records (payroll_cycle_id, employee_code, work_date);
+
+CREATE INDEX IF NOT EXISTS idx_audit_payroll_items_cycle_employee
+  ON audit_payroll_items (payroll_cycle_id, employee_code);
 
 INSERT INTO modules (code, name, description, route_path, sort_order)
 VALUES
@@ -376,6 +490,37 @@ SET
   description = EXCLUDED.description,
   updated_at = now();
 
+INSERT INTO audit_configs (
+  code,
+  name,
+  max_overtime_hours_per_day,
+  max_overtime_hours_per_month,
+  max_overtime_hours_per_year,
+  allow_sunday_work,
+  enable_overtime_tier_2,
+  note
+)
+VALUES (
+  'default',
+  'Audit bảng số 1',
+  4,
+  40,
+  300,
+  false,
+  false,
+  'Theo yêu cầu khách: không TC2, TC1 lấy số lẻ dưới hoặc bằng 4h/ngày, tối đa 40h/tháng, 300h/năm, không đi làm Chủ Nhật.'
+)
+ON CONFLICT (code) DO UPDATE
+SET
+  name = EXCLUDED.name,
+  max_overtime_hours_per_day = EXCLUDED.max_overtime_hours_per_day,
+  max_overtime_hours_per_month = EXCLUDED.max_overtime_hours_per_month,
+  max_overtime_hours_per_year = EXCLUDED.max_overtime_hours_per_year,
+  allow_sunday_work = EXCLUDED.allow_sunday_work,
+  enable_overtime_tier_2 = EXCLUDED.enable_overtime_tier_2,
+  note = EXCLUDED.note,
+  updated_at = now();
+
 -- Optional bootstrap user.
 -- Username: admin
 -- Temporary password: Admin@123
@@ -393,6 +538,29 @@ SELECT
   'admin',
   'System Admin',
   'scrypt:16384:8:1:3fae3ef7183265126731e214ae787763:4b1df4f6c3c88710843fa189029411fa68c4066d1132148cfc0373335422979e6500e7cf14762a630650fa3f8a2f0533ab26815181c00f425e429e7d9da8f916',
+  'active',
+  true
+FROM departments d
+WHERE d.code = 'admin'
+ON CONFLICT (username) DO NOTHING;
+
+-- Optional audit-focused bootstrap user.
+-- Username: admin2
+-- Temporary password: Admin2@123
+-- Change the password immediately after first login.
+INSERT INTO app_users (
+  department_id,
+  username,
+  display_name,
+  password_hash,
+  status,
+  is_admin
+)
+SELECT
+  d.id,
+  'admin2',
+  'Audit Admin',
+  'scrypt:16384:8:1:84845d2b1cfff388061f369e71b8d82e:a2c2961c74204c5b4742c49a53ef61cb865530454b41951eb411b87145ec93b344b710b620093d7de9c5d6062dd460a5caef23f14b9ce58764ae2a69a72570e0',
   'active',
   true
 FROM departments d

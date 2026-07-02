@@ -63,7 +63,7 @@ export default async function ModulesPage() {
             CF
           </div>
           <div>
-            <h2 className="text-md font-bold tracking-tight">Cẩm Thiên Group</h2>
+            <h2 className="text-md font-bold tracking-tight">Aparel</h2>
             <p className="text-xs text-slate-500">Internal Portal</p>
           </div>
         </div>
