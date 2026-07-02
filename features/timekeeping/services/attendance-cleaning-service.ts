@@ -188,15 +188,49 @@ export class AttendanceCleaningService {
 
         const employeeCodes = Array.from(uniqueEmployeeMap.keys());
         const existingEmployees = await client.query(
-          `SELECT id, employee_code
+          `SELECT id, employee_code, deleted_at
            FROM employees
-           WHERE employee_code = ANY($1::text[]) AND deleted_at IS NULL`,
+           WHERE employee_code = ANY($1::text[])`,
           [employeeCodes]
         );
 
         const employeeIdByCode = new Map<string, string>();
         for (const employee of existingEmployees.rows) {
           employeeIdByCode.set(employee.employee_code, employee.id);
+        }
+
+        const deletedExistingEmployeeCodes = existingEmployees.rows
+          .filter((employee: any) => employee.deleted_at)
+          .map((employee: any) => employee.employee_code);
+
+        if (deletedExistingEmployeeCodes.length > 0) {
+          const employeesToRestore = deletedExistingEmployeeCodes.map((employeeCode: string) => {
+            const record = uniqueEmployeeMap.get(employeeCode);
+            return {
+              employeeCode,
+              fullName: record.employeeName,
+              departmentName: record.departmentName || "Chưa phân loại",
+              positionTitle: record.positionTitle || "Nhân viên",
+            };
+          });
+
+          await client.query(
+            `UPDATE employees AS e
+             SET full_name = employee_data."fullName",
+                 department_name = employee_data."departmentName",
+                 position_title = employee_data."positionTitle",
+                 status = 'active',
+                 deleted_at = NULL,
+                 updated_at = now()
+             FROM jsonb_to_recordset($1::jsonb) AS employee_data(
+               "employeeCode" text,
+               "fullName" text,
+               "departmentName" text,
+               "positionTitle" text
+             )
+             WHERE e.employee_code = employee_data."employeeCode"`,
+            [JSON.stringify(employeesToRestore)]
+          );
         }
 
         const missingEmployees = employeeCodes
