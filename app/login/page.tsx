@@ -75,7 +75,7 @@ export default function LoginPage() {
               <span className="mt-1 block text-blue-500">và tiền lương chính xác</span>
             </h1>
             <p className="mt-7 max-w-xl text-xl leading-8 text-slate-300">
-              Một cổng vận hành thống nhất cho nhân sự, chấm công, audit dữ liệu và bảng lương nội bộ.
+              Một cổng vận hành thống nhất cho nhân sự, chấm công, dữ liệu và bảng lương nội bộ.
             </p>
           </div>
         </div>
@@ -83,7 +83,6 @@ export default function LoginPage() {
         <div className="relative z-10 space-y-5 text-slate-300">
           {[
             "Phân quyền quản trị theo module",
-            "Đối soát chấm công và audit tăng ca",
             "Bảng lương tách biệt dữ liệu gốc và dữ liệu kiểm toán",
           ].map((item) => (
             <div key={item} className="flex items-center gap-3 text-base font-medium">
@@ -133,7 +132,7 @@ export default function LoginPage() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     disabled={isLoading}
-                    placeholder="admin hoặc admin2"
+                    placeholder="admin"
                     className="h-14 w-full rounded-lg border border-slate-200 bg-white pl-12 pr-4 text-base font-medium text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:opacity-50"
                     autoComplete="username"
                     required

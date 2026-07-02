@@ -750,6 +750,36 @@ export default function PayrollDashboardClient({
     }
   };
 
+  const downloadPayrollExcel = async (source: "standard" | "audit") => {
+    if (!selectedCycleId) return;
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/payroll/items/export?cycleId=${selectedCycleId}&source=${source}`);
+      if (!res.ok) {
+        alert("Không thể xuất file Excel bảng lương.");
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") || "";
+      const fileNameMatch = disposition.match(/filename="([^"]+)"/);
+      const fileName = fileNameMatch?.[1] || `bang-luong-${selectedCycle?.code || "export"}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("Không thể xuất file Excel bảng lương.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Handle Logout
   const handleLogout = async () => {
     if (confirm("Bạn có muốn đăng xuất?")) {
@@ -1373,15 +1403,24 @@ export default function PayrollDashboardClient({
                         />
                       </div>
                     </div>
-                    <button
-                      onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
-                      className={`px-4 py-2 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
-                        isAuditOnlyUser ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"
-                      }`}
-                    >
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>{isAuditOnlyUser ? "Tính lương" : "Tính lại lương audit"}</span>
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => downloadPayrollExcel("audit")}
+                        className="px-3 py-2 border border-zinc-250 hover:bg-zinc-55 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer bg-white text-zinc-700"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Xuất Excel</span>
+                      </button>
+                      <button
+                        onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
+                        className={`px-4 py-2 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                          isAuditOnlyUser ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"
+                        }`}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>{isAuditOnlyUser ? "Tính lương" : "Tính lại lương audit"}</span>
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex-1 overflow-auto min-h-0">
@@ -2080,11 +2119,11 @@ export default function PayrollDashboardClient({
                     </div>
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => window.print()}
+                        onClick={() => downloadPayrollExcel("standard")}
                         className="px-3 py-2 border border-zinc-250 hover:bg-zinc-55 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer bg-white text-zinc-700"
                       >
-                        <Printer className="w-4 h-4" />
-                        <span>In bảng lương</span>
+                        <Download className="w-4 h-4" />
+                        <span>Xuất Excel</span>
                       </button>
                     </div>
                   </div>
@@ -2146,7 +2185,7 @@ export default function PayrollDashboardClient({
                                   className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg hover:text-blue-500 cursor-pointer"
                                 >
                                   <FileText className="w-3.5 h-3.5" />
-                                  <span>Xem Slip</span>
+                                  <span>In phiếu lương</span>
                                 </button>
                               </td>
                             </tr>
