@@ -173,8 +173,18 @@ export default function PayrollDashboardClient({
   const [salaryNoteForm, setSalaryNoteForm] = useState("");
   const [salaryConfigError, setSalaryConfigError] = useState<string | null>(null);
   const [bulkSalaryEffectiveFromForm, setBulkSalaryEffectiveFromForm] = useState("");
+  const [bulkSalaryInsuranceForm, setBulkSalaryInsuranceForm] = useState(0);
   const [bulkSalaryBaseForm, setBulkSalaryBaseForm] = useState(0);
   const [bulkSalaryPositionAllowanceForm, setBulkSalaryPositionAllowanceForm] = useState(0);
+  const [bulkSalaryResponsibilityAllowanceForm, setBulkSalaryResponsibilityAllowanceForm] = useState(0);
+  const [bulkSalarySeniorityAllowanceForm, setBulkSalarySeniorityAllowanceForm] = useState(0);
+  const [bulkSalarySafetyAllowanceForm, setBulkSalarySafetyAllowanceForm] = useState(0);
+  const [bulkSalaryPhoneAllowanceForm, setBulkSalaryPhoneAllowanceForm] = useState(0);
+  const [bulkSalaryTravelAllowanceForm, setBulkSalaryTravelAllowanceForm] = useState(0);
+  const [bulkSalaryHousingAllowanceForm, setBulkSalaryHousingAllowanceForm] = useState(0);
+  const [bulkSalaryAttendanceBonusForm, setBulkSalaryAttendanceBonusForm] = useState(0);
+  const [bulkSalaryOtherBonusForm, setBulkSalaryOtherBonusForm] = useState(0);
+  const [bulkSalaryMealAllowanceForm, setBulkSalaryMealAllowanceForm] = useState(0);
   const [bulkSalaryNoteForm, setBulkSalaryNoteForm] = useState("");
   const [bulkSalaryError, setBulkSalaryError] = useState<string | null>(null);
 
@@ -197,6 +207,9 @@ export default function PayrollDashboardClient({
 
   // Selected Cycle helper object
   const selectedCycle = cycles.find(c => c.id === selectedCycleId);
+  const canOverrideFinalizedCycle = Boolean(currentUser.isAdmin);
+  const isSelectedCycleFinalized = selectedCycle?.status === "locked" || selectedCycle?.status === "paid";
+  const isSelectedCycleReadOnly = isSelectedCycleFinalized && !canOverrideFinalizedCycle;
 
   // Load data for active cycle
   useEffect(() => {
@@ -508,8 +521,18 @@ export default function PayrollDashboardClient({
   const openBulkSalaryModal = () => {
     if (selectedEmployeeIds.size === 0) return;
     setBulkSalaryEffectiveFromForm(new Date().toISOString().split("T")[0]);
+    setBulkSalaryInsuranceForm(0);
     setBulkSalaryBaseForm(0);
     setBulkSalaryPositionAllowanceForm(0);
+    setBulkSalaryResponsibilityAllowanceForm(0);
+    setBulkSalarySeniorityAllowanceForm(0);
+    setBulkSalarySafetyAllowanceForm(0);
+    setBulkSalaryPhoneAllowanceForm(0);
+    setBulkSalaryTravelAllowanceForm(0);
+    setBulkSalaryHousingAllowanceForm(0);
+    setBulkSalaryAttendanceBonusForm(0);
+    setBulkSalaryOtherBonusForm(0);
+    setBulkSalaryMealAllowanceForm(0);
     setBulkSalaryNoteForm("");
     setBulkSalaryError(null);
     setBulkSalaryModalOpen(true);
@@ -530,8 +553,23 @@ export default function PayrollDashboardClient({
       return;
     }
 
-    if (bulkSalaryBaseForm < 0 || bulkSalaryPositionAllowanceForm < 0) {
-      setBulkSalaryError("CS và PC phải là số không âm.");
+    const bulkSalaryValues = [
+      bulkSalaryInsuranceForm,
+      bulkSalaryBaseForm,
+      bulkSalaryPositionAllowanceForm,
+      bulkSalaryResponsibilityAllowanceForm,
+      bulkSalarySeniorityAllowanceForm,
+      bulkSalarySafetyAllowanceForm,
+      bulkSalaryPhoneAllowanceForm,
+      bulkSalaryTravelAllowanceForm,
+      bulkSalaryHousingAllowanceForm,
+      bulkSalaryAttendanceBonusForm,
+      bulkSalaryOtherBonusForm,
+      bulkSalaryMealAllowanceForm,
+    ];
+
+    if (bulkSalaryValues.some((value) => value < 0)) {
+      setBulkSalaryError("Các khoản lương và phụ cấp phải là số không âm.");
       return;
     }
 
@@ -543,9 +581,18 @@ export default function PayrollDashboardClient({
         body: JSON.stringify({
           employeeIds,
           effectiveFrom: bulkSalaryEffectiveFromForm,
-          insuranceSalary: bulkSalaryBaseForm,
+          insuranceSalary: bulkSalaryInsuranceForm,
           baseSalary: bulkSalaryBaseForm,
           positionAllowance: bulkSalaryPositionAllowanceForm,
+          responsibilityAllowance: bulkSalaryResponsibilityAllowanceForm,
+          seniorityAllowance: bulkSalarySeniorityAllowanceForm,
+          safetyAllowance: bulkSalarySafetyAllowanceForm,
+          phoneAllowance: bulkSalaryPhoneAllowanceForm,
+          travelAllowance: bulkSalaryTravelAllowanceForm,
+          housingAllowance: bulkSalaryHousingAllowanceForm,
+          attendanceBonus: bulkSalaryAttendanceBonusForm,
+          otherBonus: bulkSalaryOtherBonusForm,
+          mealAllowance: bulkSalaryMealAllowanceForm,
           note: bulkSalaryNoteForm,
         }),
       });
@@ -665,12 +712,12 @@ export default function PayrollDashboardClient({
 
   const handleDeleteImportedAttendance = async () => {
     if (!selectedCycleId) return;
-    if (selectedCycle?.status === "locked" || selectedCycle?.status === "paid") {
+    if (isSelectedCycleReadOnly) {
       alert("Chu kỳ lương này đã khóa hoặc chi trả, không thể xóa dữ liệu chấm công.");
       return;
     }
 
-    if (!confirm("Xóa dữ liệu chấm công đã import của chu kỳ này? Bảng lương và dữ liệu audit đã tính từ chấm công này cũng sẽ được xóa.")) return;
+    if (!confirm("Xóa dữ liệu chấm công đã import của chu kỳ này? Bảng lương và dữ liệu audit đã tính từ chấm công này cũng sẽ được xóa. Admin có thể thực hiện cả với chu kỳ đã khóa/đã chi trả.")) return;
 
     try {
       setIsLoading(true);
@@ -2132,7 +2179,7 @@ export default function PayrollDashboardClient({
                     <div className="flex items-center gap-3">
                       <button
                         onClick={handleDeleteImportedAttendance}
-                        disabled={!selectedCycleId || selectedCycle?.status === "locked" || selectedCycle?.status === "paid" || selectedCycle?.status === "draft"}
+                        disabled={!selectedCycleId || selectedCycle?.status === "draft" || isSelectedCycleReadOnly}
                         className="px-3 py-2 border border-red-200 hover:bg-red-50 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer bg-white text-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -2140,7 +2187,7 @@ export default function PayrollDashboardClient({
                       </button>
                       <button
                         onClick={() => {
-                          if (selectedCycle?.status === "locked" || selectedCycle?.status === "paid") {
+                          if (isSelectedCycleReadOnly) {
                             alert("Chu kỳ lương này đã khóa hoặc chi trả, không thể tải lên chấm công mới.");
                             return;
                           }
@@ -2295,7 +2342,7 @@ export default function PayrollDashboardClient({
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => selectedCycleId && handleCalculatePayroll(selectedCycleId)}
-                        disabled={!selectedCycleId || selectedCycle?.status === "draft" || selectedCycle?.status === "locked" || selectedCycle?.status === "paid"}
+                        disabled={!selectedCycleId || selectedCycle?.status === "draft" || isSelectedCycleReadOnly}
                         className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <RefreshCw className="w-4 h-4" />
@@ -2560,8 +2607,8 @@ export default function PayrollDashboardClient({
       {/* Bulk Salary Configuration Dialog */}
       {bulkSalaryModalOpen && (
         <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white border border-zinc-250 rounded-2xl shadow-xl w-full max-w-xl overflow-hidden animate-zoomIn">
-            <div className="px-6 py-4 border-b border-zinc-150 bg-zinc-50 flex justify-between items-center">
+          <div className="bg-white border border-zinc-250 rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden animate-zoomIn flex flex-col max-h-[85vh]">
+            <div className="px-6 py-4 border-b border-zinc-150 bg-zinc-50 flex justify-between items-center shrink-0">
               <div>
                 <h3 className="font-bold text-md text-zinc-800">Gán lương đồng loạt</h3>
                 <p className="text-xs text-zinc-400 mt-1 font-semibold">{selectedEmployees.length} nhân viên đã chọn</p>
@@ -2572,9 +2619,9 @@ export default function PayrollDashboardClient({
             </div>
 
             <form onSubmit={handleBulkSalarySubmit}>
-              <div className="p-6 space-y-4 text-sm">
+              <div className="p-6 space-y-4 text-xs max-h-[68vh] overflow-y-auto">
                 {bulkSalaryError && (
-                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-2">
                     <ShieldAlert className="w-4 h-4 shrink-0" />
                     <span>{bulkSalaryError}</span>
                   </div>
@@ -2583,53 +2630,165 @@ export default function PayrollDashboardClient({
                 <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
                   <div className="font-bold mb-1">Phạm vi áp dụng</div>
                   <div>
-                    Cấu hình mới sẽ được thêm cho toàn bộ nhân viên đang chọn. CS cũng được dùng làm lương đóng bảo hiểm.
+                    Cấu hình lương bên dưới sẽ được thêm cho toàn bộ nhân viên đang chọn.
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">Hiệu lực từ ngày *</label>
-                  <input
-                    type="date"
-                    value={bulkSalaryEffectiveFromForm}
-                    onChange={(e) => setBulkSalaryEffectiveFromForm(e.target.value)}
-                    className="input rounded-xl border-zinc-250 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
-                    required
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">Hiệu lực từ ngày *</label>
+                    <input
+                      type="date"
+                      value={bulkSalaryEffectiveFromForm}
+                      onChange={(e) => setBulkSalaryEffectiveFromForm(e.target.value)}
+                      className="input rounded-xl border-zinc-250 py-1.5 text-xs"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">Lương đóng bảo hiểm *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryInsuranceForm}
+                      onChange={(e) => setBulkSalaryInsuranceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1.5 text-xs text-right font-bold text-zinc-850"
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">CS *</label>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">Lương cơ bản *</label>
                     <input
                       type="number"
                       min="0"
                       value={bulkSalaryBaseForm}
                       onChange={(e) => setBulkSalaryBaseForm(parseFloat(e.target.value) || 0)}
-                      className="input rounded-xl border-zinc-250 text-sm text-right font-bold text-zinc-850"
+                      className="input rounded-xl border-zinc-250 py-1.5 text-xs text-right font-bold text-zinc-850"
                       required
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">PC</label>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">Phụ cấp Thâm niên</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalarySeniorityAllowanceForm}
+                      onChange={(e) => setBulkSalarySeniorityAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1.5 text-xs text-right"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 border-t border-zinc-150 pt-3">
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">PC Chức danh</label>
                     <input
                       type="number"
                       min="0"
                       value={bulkSalaryPositionAllowanceForm}
                       onChange={(e) => setBulkSalaryPositionAllowanceForm(parseFloat(e.target.value) || 0)}
-                      className="input rounded-xl border-zinc-250 text-sm text-right font-bold text-zinc-850"
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">PC Trách nhiệm</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryResponsibilityAllowanceForm}
+                      onChange={(e) => setBulkSalaryResponsibilityAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">PC An toàn VSSV</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalarySafetyAllowanceForm}
+                      onChange={(e) => setBulkSalarySafetyAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">PC Điện thoại</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryPhoneAllowanceForm}
+                      onChange={(e) => setBulkSalaryPhoneAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">PC Đi lại (Xăng)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryTravelAllowanceForm}
+                      onChange={(e) => setBulkSalaryTravelAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">PC Nhà ở</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryHousingAllowanceForm}
+                      onChange={(e) => setBulkSalaryHousingAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">Thưởng Chuyên cần</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryAttendanceBonusForm}
+                      onChange={(e) => setBulkSalaryAttendanceBonusForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">Thưởng khác</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryOtherBonusForm}
+                      onChange={(e) => setBulkSalaryOtherBonusForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">PC Cơm trưa</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bulkSalaryMealAllowanceForm}
+                      onChange={(e) => setBulkSalaryMealAllowanceForm(parseFloat(e.target.value) || 0)}
+                      className="input rounded-xl border-zinc-250 py-1 text-right text-xs"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">Ghi chú</label>
+                  <label className="block font-bold text-zinc-500 uppercase tracking-wider mb-1">Ghi chú</label>
                   <input
                     type="text"
                     value={bulkSalaryNoteForm}
                     onChange={(e) => setBulkSalaryNoteForm(e.target.value)}
-                    placeholder="vd: Gán nhanh CS/PC theo bộ lọc"
-                    className="input rounded-xl border-zinc-250 text-sm"
+                    placeholder="vd: Cập nhật lương định kỳ năm 2026..."
+                    className="input rounded-xl border-zinc-250 py-1.5 text-xs"
                   />
                 </div>
 

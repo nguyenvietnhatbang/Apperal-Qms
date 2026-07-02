@@ -9,9 +9,24 @@ export class AttendanceImportService {
     cycleId: string,
     fileName: string,
     fileBuffer: Buffer,
-    userId: string
+    userId: string,
+    allowFinalizedCycleUpdate = false
   ) {
     return await transaction(async (client) => {
+      const cycleRes = await client.query(
+        `SELECT status FROM payroll_cycles WHERE id = $1`,
+        [cycleId]
+      );
+
+      if (cycleRes.rows.length === 0) {
+        throw new Error("Không tìm thấy chu kỳ lương.");
+      }
+
+      const cycleStatus = cycleRes.rows[0].status;
+      if ((cycleStatus === "locked" || cycleStatus === "paid") && !allowFinalizedCycleUpdate) {
+        throw new Error("Không thể import chấm công vào chu kỳ đã khóa hoặc đã chi trả.");
+      }
+
       // Create import record
       const importRes = await client.query(
         `INSERT INTO attendance_imports (payroll_cycle_id, file_name, source_kind, status, imported_by)
@@ -151,7 +166,7 @@ export class AttendanceImportService {
   /**
    * Delete imported attendance data and dependent payroll outputs for a cycle.
    */
-  static async deleteCycleImportData(cycleId: string, actorId: string) {
+  static async deleteCycleImportData(cycleId: string, actorId: string, allowFinalizedCycleUpdate = false) {
     return await transaction(async (client) => {
       const cycleRes = await client.query(
         `SELECT status FROM payroll_cycles WHERE id = $1`,
@@ -163,7 +178,7 @@ export class AttendanceImportService {
       }
 
       const previousStatus = cycleRes.rows[0].status;
-      if (previousStatus === "locked" || previousStatus === "paid") {
+      if ((previousStatus === "locked" || previousStatus === "paid") && !allowFinalizedCycleUpdate) {
         throw new Error("Không thể xóa chấm công của chu kỳ đã khóa hoặc đã chi trả.");
       }
 

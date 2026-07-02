@@ -29,6 +29,15 @@ export async function POST(request: NextRequest) {
     const insuranceSalary = toMoney(body.insuranceSalary);
     const baseSalary = toMoney(body.baseSalary);
     const positionAllowance = toMoney(body.positionAllowance);
+    const responsibilityAllowance = toMoney(body.responsibilityAllowance);
+    const seniorityAllowance = toMoney(body.seniorityAllowance);
+    const safetyAllowance = toMoney(body.safetyAllowance);
+    const phoneAllowance = toMoney(body.phoneAllowance);
+    const travelAllowance = toMoney(body.travelAllowance);
+    const housingAllowance = toMoney(body.housingAllowance);
+    const attendanceBonus = toMoney(body.attendanceBonus);
+    const otherBonus = toMoney(body.otherBonus);
+    const mealAllowance = toMoney(body.mealAllowance);
     const note = typeof body.note === "string" ? body.note.trim() : "";
 
     if (employeeIds.length === 0) {
@@ -43,8 +52,23 @@ export async function POST(request: NextRequest) {
       return ApiResponse.badRequest("Ngày hiệu lực bắt đầu không được để trống.", "MISSING_EFFECTIVE_FROM");
     }
 
-    if ([insuranceSalary, baseSalary, positionAllowance].some((value) => Number.isNaN(value) || value < 0)) {
-      return ApiResponse.badRequest("CS và PC phải là số không âm.", "INVALID_SALARY_VALUES");
+    const salaryValues = [
+      insuranceSalary,
+      baseSalary,
+      positionAllowance,
+      responsibilityAllowance,
+      seniorityAllowance,
+      safetyAllowance,
+      phoneAllowance,
+      travelAllowance,
+      housingAllowance,
+      attendanceBonus,
+      otherBonus,
+      mealAllowance,
+    ];
+
+    if (salaryValues.some((value) => Number.isNaN(value) || value < 0)) {
+      return ApiResponse.badRequest("Các khoản lương và phụ cấp phải là số không âm.", "INVALID_SALARY_VALUES");
     }
 
     const configs = await SalaryConfigService.createBulkSalaryConfigs({
@@ -53,15 +77,15 @@ export async function POST(request: NextRequest) {
       insuranceSalary,
       baseSalary,
       positionAllowance,
-      responsibilityAllowance: 0,
-      seniorityAllowance: 0,
-      safetyAllowance: 0,
-      phoneAllowance: 0,
-      travelAllowance: 0,
-      housingAllowance: 0,
-      attendanceBonus: 0,
-      otherBonus: 0,
-      mealAllowance: 0,
+      responsibilityAllowance,
+      seniorityAllowance,
+      safetyAllowance,
+      phoneAllowance,
+      travelAllowance,
+      housingAllowance,
+      attendanceBonus,
+      otherBonus,
+      mealAllowance,
       note: note || null,
     });
 

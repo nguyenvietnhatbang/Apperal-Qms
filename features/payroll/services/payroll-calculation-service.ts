@@ -6,7 +6,7 @@ export class PayrollCalculationService {
   /**
    * Calculate payroll for all employees in a cycle and save snapshot results
    */
-  static async calculateCyclePayroll(cycleId: string, actorId: string) {
+  static async calculateCyclePayroll(cycleId: string, actorId: string, allowFinalizedCycleUpdate = false) {
     return await transaction(async (client) => {
       // 1. Fetch cycle info
       const cycleRes = await client.query(
@@ -18,7 +18,8 @@ export class PayrollCalculationService {
       if (cycleRes.rows.length === 0) throw new Error("Không tìm thấy chu kỳ lương.");
       const cycle = cycleRes.rows[0];
       
-      if (cycle.status === "locked" || cycle.status === "paid") {
+      const isFinalizedCycle = cycle.status === "locked" || cycle.status === "paid";
+      if (isFinalizedCycle && !allowFinalizedCycleUpdate) {
         throw new Error("Không thể tính lại lương cho chu kỳ đã khóa hoặc đã thanh toán.");
       }
 
@@ -300,21 +301,28 @@ export class PayrollCalculationService {
         }
       }
 
-      // Update cycle status to calculated
+      const nextStatus = isFinalizedCycle ? cycle.status : "calculated";
+
+      // Update cycle status to calculated, but keep finalized status when admin recalculates.
       await client.query(
-        `UPDATE payroll_cycles SET status = 'calculated', calculated_at = now(), updated_at = now() WHERE id = $1`,
-        [cycleId]
+        `UPDATE payroll_cycles SET status = $1, calculated_at = now(), updated_at = now() WHERE id = $2`,
+        [nextStatus, cycleId]
       );
 
       // Audit log
       await client.query(
         `INSERT INTO payroll_audit_logs (payroll_cycle_id, actor_user_id, action, previous_status, next_status, payload)
-         VALUES ($1, $2, 'calculate_payroll', $3, 'calculated', $4)`,
+         VALUES ($1, $2, 'calculate_payroll', $3, $4, $5)`,
         [
           cycleId,
           actorId,
           cycle.status,
-          JSON.stringify({ message: "Thực hiện tính lương tự động cho chu kỳ." }),
+          nextStatus,
+          JSON.stringify({
+            message: isFinalizedCycle
+              ? "Admin cập nhật lại lương cho chu kỳ đã chốt/đã chi trả."
+              : "Thực hiện tính lương tự động cho chu kỳ.",
+          }),
         ]
       );
 

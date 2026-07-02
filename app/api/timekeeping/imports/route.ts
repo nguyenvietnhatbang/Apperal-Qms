@@ -58,7 +58,8 @@ export async function POST(request: NextRequest) {
       cycleId,
       file.name,
       buffer,
-      currentUser.id
+      currentUser.id,
+      currentUser.isAdmin
     );
 
     // 2. Clean and standardize the rows
@@ -93,7 +94,7 @@ export async function DELETE(request: NextRequest) {
       return ApiResponse.badRequest("Mã chu kỳ thanh toán (cycleId) là bắt buộc.", "MISSING_FIELDS");
     }
 
-    const result = await AttendanceImportService.deleteCycleImportData(cycleId, currentUser.id);
+    const result = await AttendanceImportService.deleteCycleImportData(cycleId, currentUser.id, currentUser.isAdmin);
     return ApiResponse.success({
       message: "Đã xóa dữ liệu chấm công đã import của chu kỳ.",
       ...result,

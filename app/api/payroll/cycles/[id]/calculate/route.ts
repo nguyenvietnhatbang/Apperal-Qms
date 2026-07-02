@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const { id } = await context.params;
     
-    await PayrollCalculationService.calculateCyclePayroll(id, currentUser.id);
+    await PayrollCalculationService.calculateCyclePayroll(id, currentUser.id, currentUser.isAdmin);
 
     return ApiResponse.success({ message: "Tính lương thành công." });
   } catch (error: any) {
