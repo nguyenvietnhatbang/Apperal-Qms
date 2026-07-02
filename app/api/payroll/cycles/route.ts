@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       note,
     }, currentUser.id);
 
-    return ApiResponse.success(newCycle, 21);
+    return ApiResponse.success(newCycle, 201);
   } catch (error: any) {
     console.error("Error in POST cycle:", error);
     return ApiResponse.error(error.message || "Lỗi máy chủ", "SERVER_ERROR", undefined, 500);

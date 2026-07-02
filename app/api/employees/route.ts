@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       hasChildUnder6,
     });
 
-    return ApiResponse.success(newEmp, 21);
+    return ApiResponse.success(newEmp, 201);
   } catch (error: any) {
     console.error("Error in POST employees:", error);
     return ApiResponse.error(error.message || "Lỗi máy chủ", "SERVER_ERROR", undefined, 500);

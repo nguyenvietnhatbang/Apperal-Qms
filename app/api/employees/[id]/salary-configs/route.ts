@@ -74,7 +74,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       note,
     });
 
-    return ApiResponse.success(newConfig, 21);
+    return ApiResponse.success(newConfig, 201);
   } catch (error: any) {
     console.error("Error in POST employee salary configs:", error);
     return ApiResponse.error(error.message || "Lỗi máy chủ", "SERVER_ERROR", undefined, 500);

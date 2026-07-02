@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       permissions || []
     );
 
-    return ApiResponse.success(newDept, 21);
+    return ApiResponse.success(newDept, 201);
   } catch (error: any) {
     console.error("Error in POST departments:", error);
     return ApiResponse.error(error.message || "Lỗi máy chủ", "SERVER_ERROR", undefined, 500);

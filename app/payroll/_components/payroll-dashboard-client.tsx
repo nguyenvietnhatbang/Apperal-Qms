@@ -589,7 +589,7 @@ export default function PayrollDashboardClient({
       const res = await fetch(`/api/audit/cycles/${cycleId}/run`, { method: "POST" });
       const data = await res.json();
       if (!data.success) {
-        alert(data.error?.message || "Lỗi chạy audit");
+        alert(data.error?.message || (isAuditOnlyUser ? "Lỗi xử lý dữ liệu" : "Lỗi chạy audit"));
         return;
       }
       await loadAuditAttendanceRecords();
@@ -597,7 +597,7 @@ export default function PayrollDashboardClient({
       setActiveTab("auditSheet");
     } catch (err) {
       console.error(err);
-      alert("Không thể chạy audit.");
+      alert(isAuditOnlyUser ? "Không thể xử lý dữ liệu." : "Không thể chạy audit.");
     } finally {
       setIsLoading(false);
     }
@@ -622,14 +622,14 @@ export default function PayrollDashboardClient({
       });
       const data = await res.json();
       if (!data.success) {
-        setAuditConfigStatus(data.error?.message || "Không cập nhật được cấu hình audit.");
+        setAuditConfigStatus(data.error?.message || (isAuditOnlyUser ? "Không cập nhật được cấu hình." : "Không cập nhật được cấu hình audit."));
         return;
       }
       setAuditConfig(data.data);
-      setAuditConfigStatus("Đã lưu cấu hình audit.");
+      setAuditConfigStatus(isAuditOnlyUser ? "Đã lưu cấu hình." : "Đã lưu cấu hình audit.");
     } catch (err) {
       console.error(err);
-      setAuditConfigStatus("Lỗi kết nối khi lưu cấu hình audit.");
+      setAuditConfigStatus(isAuditOnlyUser ? "Lỗi kết nối khi lưu cấu hình." : "Lỗi kết nối khi lưu cấu hình audit.");
     } finally {
       setIsLoading(false);
     }
@@ -932,29 +932,35 @@ export default function PayrollDashboardClient({
             <button
               onClick={() => { setActiveTab("auditConfig"); setSearchTerm(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "auditConfig" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                activeTab === "auditConfig"
+                  ? isAuditOnlyUser ? "bg-blue-50 text-blue-600 shadow-sm" : "bg-emerald-50 text-emerald-700 shadow-sm"
+                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
             >
               <SlidersHorizontal className="w-5 h-5" />
-              <span>Cấu hình audit</span>
+              <span>{isAuditOnlyUser ? "Cấu hình quy tắc" : "Cấu hình audit"}</span>
             </button>
             <button
               onClick={() => { setActiveTab("auditAttendance"); setSearchTerm(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "auditAttendance" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                activeTab === "auditAttendance"
+                  ? isAuditOnlyUser ? "bg-blue-50 text-blue-600 shadow-sm" : "bg-emerald-50 text-emerald-700 shadow-sm"
+                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
             >
               <FileSpreadsheet className="w-5 h-5" />
-              <span>Chấm công audit</span>
+              <span>{isAuditOnlyUser ? "Chấm công" : "Chấm công audit"}</span>
             </button>
             <button
               onClick={() => { setActiveTab("auditSheet"); setSearchTerm(""); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
-                activeTab === "auditSheet" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                activeTab === "auditSheet"
+                  ? isAuditOnlyUser ? "bg-blue-50 text-blue-600 shadow-sm" : "bg-emerald-50 text-emerald-700 shadow-sm"
+                  : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
             >
               <FileText className="w-5 h-5" />
-              <span>Bảng lương audit</span>
+              <span>{isAuditOnlyUser ? "Bảng lương tổng hợp" : "Bảng lương audit"}</span>
             </button>
           </nav>
         </div>
@@ -1039,17 +1045,25 @@ export default function PayrollDashboardClient({
               <form onSubmit={handleAuditConfigSubmit} className="flex-1 flex flex-col min-h-0">
                 <div className="px-6 py-4 border-b border-zinc-150 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white">
                   <div>
-                    <h3 className="text-sm font-bold text-zinc-850">Cấu hình audit bảng số 1</h3>
-                    <p className="text-xs text-zinc-500 mt-1">Cấu hình này chỉ sinh dữ liệu audit, không sửa bảng chấm công và bảng lương gốc.</p>
+                    <h3 className="text-sm font-bold text-zinc-850">
+                      {isAuditOnlyUser ? "Cấu hình quy tắc bảng số 1" : "Cấu hình audit bảng số 1"}
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {isAuditOnlyUser
+                        ? "Thiết lập chuẩn làm sạch chấm công trước khi tính lương."
+                        : "Cấu hình này chỉ sinh dữ liệu audit, không sửa bảng chấm công và bảng lương gốc."}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
+                      className={`px-4 py-2 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                        isAuditOnlyUser ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"
+                      }`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Chạy audit kỳ này</span>
+                      <span>{isAuditOnlyUser ? "Làm sạch kỳ này" : "Chạy audit kỳ này"}</span>
                     </button>
                     <button
                       type="submit"
@@ -1073,7 +1087,9 @@ export default function PayrollDashboardClient({
                         onChange={(e) => setAuditDayLimitForm(Number(e.target.value))}
                         className="input rounded-xl border-zinc-250 text-sm font-bold"
                       />
-                      <p className="text-xs text-zinc-500 mt-2">Nếu vượt mức này, audit trừ từng block để lấy số lẻ còn lại.</p>
+                      <p className="text-xs text-zinc-500 mt-2">
+                        Nếu vượt mức này, hệ thống trừ từng block để lấy số lẻ còn lại.
+                      </p>
                     </div>
                     <div className="border border-zinc-200 rounded-lg p-4 bg-white">
                       <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">TC1 tối đa / tháng</label>
@@ -1111,7 +1127,9 @@ export default function PayrollDashboardClient({
                       />
                       <span>
                         <span className="block text-sm font-bold text-zinc-800">Cho phép công Chủ Nhật</span>
-                        <span className="block text-xs text-zinc-500 mt-1">Tắt mặc định: audit sẽ đưa công và tăng ca Chủ Nhật về 0.</span>
+                        <span className="block text-xs text-zinc-500 mt-1">
+                          Tắt mặc định: công và tăng ca Chủ Nhật được đưa về 0.
+                        </span>
                       </span>
                     </label>
                     <label className="border border-zinc-200 rounded-lg p-4 flex items-start gap-3 cursor-pointer">
@@ -1122,7 +1140,9 @@ export default function PayrollDashboardClient({
                         className="mt-1 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
                       />
                       <span>
-                        <span className="block text-sm font-bold text-zinc-800">Bật tăng ca 2 trong audit</span>
+                        <span className="block text-sm font-bold text-zinc-800">
+                          {isAuditOnlyUser ? "Bật tăng ca 2" : "Bật tăng ca 2 trong audit"}
+                        </span>
                         <span className="block text-xs text-zinc-500 mt-1">Tắt mặc định: TC2 được đưa về TC1 trước khi áp dụng giới hạn.</span>
                       </span>
                     </label>
@@ -1139,8 +1159,12 @@ export default function PayrollDashboardClient({
                   </div>
 
                   <div className="mt-5 max-w-5xl rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
-                    <div className="font-bold mb-1">Cấu hình đang dùng: {auditConfig?.name || "Audit bảng số 1"}</div>
-                    <div>Ví dụ TC1 = 9h, giới hạn ngày = 4h: audit trừ 4h còn 5h, vẫn lớn hơn 4h nên trừ tiếp, còn 1h để tính lương audit.</div>
+                    <div className="font-bold mb-1">
+                      Cấu hình đang dùng: {isAuditOnlyUser ? "Bảng số 1" : auditConfig?.name || "Audit bảng số 1"}
+                    </div>
+                    <div>
+                      Ví dụ TC1 = 9h, giới hạn ngày = 4h: hệ thống trừ 4h còn 5h, vẫn lớn hơn 4h nên trừ tiếp, còn 1h để tính lương.
+                    </div>
                   </div>
 
                   {auditConfigStatus && (
@@ -1195,45 +1219,87 @@ export default function PayrollDashboardClient({
                     </div>
                     <button
                       onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
+                      className={`px-4 py-2 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                        isAuditOnlyUser ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"
+                      }`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Chạy lại audit</span>
+                      <span>{isAuditOnlyUser ? "Cập nhật dữ liệu" : "Chạy lại audit"}</span>
                     </button>
                   </div>
 
                   <div className="flex-1 overflow-auto min-h-0">
-                    <table className="w-full min-w-[1180px] text-left border-collapse text-xs">
+                    <table className={`w-full text-left border-collapse text-xs ${isAuditOnlyUser ? "" : "min-w-[1180px]"}`}>
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Mã NV</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Họ Tên</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ngày</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công gốc</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công audit</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 gốc</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC2 gốc</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 audit</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[280px]">Lý do chỉnh</th>
+                          {isAuditOnlyUser ? (
+                            <>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Mã NV</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Họ Tên</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ngày</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Giờ</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Vào 1</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Ra 1</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Trễ</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Sớm</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC2</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ký hiệu</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Mã NV</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Họ Tên</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ngày</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công gốc</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công audit</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 gốc</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC2 gốc</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 audit</th>
+                              <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[280px]">Lý do chỉnh</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 text-zinc-650">
                         {paginatedAuditRecords.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="px-4 py-8 text-center text-zinc-400">Chưa có bảng chấm công audit cho chu kỳ này.</td>
+                            <td colSpan={isAuditOnlyUser ? 12 : 9} className="px-4 py-8 text-center text-zinc-400">
+                              {isAuditOnlyUser ? "Chưa có dữ liệu chấm công cho chu kỳ này." : "Chưa có bảng chấm công audit cho chu kỳ này."}
+                            </td>
                           </tr>
                         ) : (
                           paginatedAuditRecords.map((r, idx) => (
                             <tr key={r.id || idx} className="hover:bg-zinc-50/50">
-                              <td className="px-4 py-2.5 font-mono font-bold text-zinc-700">{r.employeeCode}</td>
-                              <td className="px-4 py-2.5 font-semibold text-zinc-850">{r.employeeName}</td>
-                              <td className="px-4 py-2.5">{formatDate(r.workDate)} ({r.weekdayName || "-"})</td>
-                              <td className="px-4 py-2.5 text-center">{formatDecimal(r.originalWorkdayCount, 1)}</td>
-                              <td className="px-4 py-2.5 text-center font-bold text-emerald-650">{formatDecimal(r.workdayCount, 1)}</td>
-                              <td className="px-4 py-2.5 text-center font-mono">{formatDecimal(r.originalOvertimeNormalHours, 1)}h</td>
-                              <td className="px-4 py-2.5 text-center font-mono">{formatDecimal(r.originalOvertimeSundayHours, 1)}h</td>
-                              <td className="px-4 py-2.5 text-center font-mono font-bold text-emerald-700">{formatDecimal(r.overtimeNormalHours, 1)}h</td>
-                              <td className="px-4 py-2.5 text-zinc-500 whitespace-normal">{Array.isArray(r.adjustmentReason) ? r.adjustmentReason.join(" ") : r.note || "-"}</td>
+                              {isAuditOnlyUser ? (
+                                <>
+                                  <td className="px-4 py-2.5 font-mono font-bold text-zinc-700">{r.employeeCode}</td>
+                                  <td className="px-4 py-2.5 font-semibold text-zinc-850">{r.employeeName}</td>
+                                  <td className="px-4 py-2.5">{formatDate(r.workDate)} ({r.weekdayName || "-"})</td>
+                                  <td className="px-4 py-2.5 text-center font-bold text-emerald-600">{formatDecimal(r.workdayCount, 1)}</td>
+                                  <td className="px-4 py-2.5 text-center font-mono">{formatDecimal(r.workHours, 1)}</td>
+                                  <td className="px-4 py-2.5 text-center text-zinc-500">{r.checkIn1 ? r.checkIn1.substring(0,5) : "-"}</td>
+                                  <td className="px-4 py-2.5 text-center text-zinc-500">{r.checkOut1 ? r.checkOut1.substring(0,5) : "-"}</td>
+                                  <td className="px-4 py-2.5 text-center text-red-650 font-bold">{r.lateMinutes || "-"}</td>
+                                  <td className="px-4 py-2.5 text-center text-orange-650 font-bold">{r.earlyLeaveMinutes || "-"}</td>
+                                  <td className="px-4 py-2.5 text-center font-mono font-bold text-blue-650">{r.overtimeNormalHours ? formatDecimal(r.overtimeNormalHours, 1) : "-"}</td>
+                                  <td className="px-4 py-2.5 text-center font-mono font-bold text-indigo-650">{r.overtimeSundayHours ? formatDecimal(r.overtimeSundayHours, 1) : "-"}</td>
+                                  <td className="px-4 py-2.5 font-semibold text-zinc-805">{r.symbol || "-"}</td>
+                                </>
+                              ) : (
+                                <>
+                                  <td className="px-4 py-2.5 font-mono font-bold text-zinc-700">{r.employeeCode}</td>
+                                  <td className="px-4 py-2.5 font-semibold text-zinc-850">{r.employeeName}</td>
+                                  <td className="px-4 py-2.5">{formatDate(r.workDate)} ({r.weekdayName || "-"})</td>
+                                  <td className="px-4 py-2.5 text-center">{formatDecimal(r.originalWorkdayCount, 1)}</td>
+                                  <td className="px-4 py-2.5 text-center font-bold text-emerald-650">{formatDecimal(r.workdayCount, 1)}</td>
+                                  <td className="px-4 py-2.5 text-center font-mono">{formatDecimal(r.originalOvertimeNormalHours, 1)}h</td>
+                                  <td className="px-4 py-2.5 text-center font-mono">{formatDecimal(r.originalOvertimeSundayHours, 1)}h</td>
+                                  <td className="px-4 py-2.5 text-center font-mono font-bold text-emerald-700">{formatDecimal(r.overtimeNormalHours, 1)}h</td>
+                                  <td className="px-4 py-2.5 text-zinc-500 whitespace-normal">{Array.isArray(r.adjustmentReason) ? r.adjustmentReason.join(" ") : r.note || "-"}</td>
+                                </>
+                              )}
                             </tr>
                           ))
                         )}
@@ -1258,7 +1324,7 @@ export default function PayrollDashboardClient({
                     </select>
                     <div className="flex items-center gap-1">
                       <button onClick={() => setPageAuditAttendance(p => Math.max(1, p - 1))} disabled={pageAuditAttendance === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                      <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-md font-bold mx-1">{pageAuditAttendance} / {totalPages}</span>
+                      <span className={`px-2.5 py-1 text-white rounded-md font-bold mx-1 ${isAuditOnlyUser ? "bg-blue-600" : "bg-emerald-600"}`}>{pageAuditAttendance} / {totalPages}</span>
                       <button onClick={() => setPageAuditAttendance(p => Math.min(totalPages, p + 1))} disabled={pageAuditAttendance === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
@@ -1311,10 +1377,12 @@ export default function PayrollDashboardClient({
                     </div>
                     <button
                       onClick={() => selectedCycleId && handleRunAudit(selectedCycleId)}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
+                      className={`px-4 py-2 text-white rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer ${
+                        isAuditOnlyUser ? "bg-blue-600 hover:bg-blue-500" : "bg-emerald-600 hover:bg-emerald-500"
+                      }`}
                     >
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>Tính lại lương audit</span>
+                      <span>{isAuditOnlyUser ? "Tính lương" : "Tính lại lương audit"}</span>
                     </button>
                   </div>
 
@@ -1324,20 +1392,22 @@ export default function PayrollDashboardClient({
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
                           <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Mã NV</th>
                           <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[150px]">Họ và Tên</th>
-                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">Công audit</th>
-                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC1 audit</th>
-                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">TC2 audit</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">{isAuditOnlyUser ? "Công" : "Công audit"}</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">{isAuditOnlyUser ? "TC1" : "TC1 audit"}</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-center">{isAuditOnlyUser ? "TC2" : "TC2 audit"}</th>
                           <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Lương ngày công</th>
                           <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Tiền tăng ca</th>
                           <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Tổng thu nhập</th>
                           <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right">Khấu trừ</th>
-                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right font-bold text-zinc-850">Thực nhận audit</th>
+                          <th className="px-4 py-4 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 text-right font-bold text-zinc-850">{isAuditOnlyUser ? "Thực nhận" : "Thực nhận audit"}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 text-zinc-750">
                         {paginatedAuditSheet.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="px-4 py-8 text-center text-zinc-400">Chưa có bảng lương audit cho chu kỳ này.</td>
+                            <td colSpan={10} className="px-4 py-8 text-center text-zinc-400">
+                              {isAuditOnlyUser ? "Chưa có kết quả tính lương cho chu kỳ này." : "Chưa có bảng lương audit cho chu kỳ này."}
+                            </td>
                           </tr>
                         ) : (
                           paginatedAuditSheet.map((item) => (
@@ -1376,7 +1446,7 @@ export default function PayrollDashboardClient({
                     </select>
                     <div className="flex items-center gap-1">
                       <button onClick={() => setPageAuditSheet(p => Math.max(1, p - 1))} disabled={pageAuditSheet === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronLeft className="w-3.5 h-3.5" /></button>
-                      <span className="px-2.5 py-1 bg-emerald-600 text-white rounded-md font-bold mx-1">{pageAuditSheet} / {totalPages}</span>
+                      <span className={`px-2.5 py-1 text-white rounded-md font-bold mx-1 ${isAuditOnlyUser ? "bg-blue-600" : "bg-emerald-600"}`}>{pageAuditSheet} / {totalPages}</span>
                       <button onClick={() => setPageAuditSheet(p => Math.min(totalPages, p + 1))} disabled={pageAuditSheet === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>

@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       isAdmin,
     });
 
-    return ApiResponse.success(newUser, 21);
+    return ApiResponse.success(newUser, 201);
   } catch (error: any) {
     console.error("Error in POST users:", error);
     return ApiResponse.error(error.message || "Lỗi máy chủ", "SERVER_ERROR", undefined, 500);
