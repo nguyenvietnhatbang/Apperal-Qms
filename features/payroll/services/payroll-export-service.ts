@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { query, queryOne } from "@/lib/db";
 
 type PayrollExportSource = "standard" | "audit";
@@ -137,19 +137,17 @@ function buildTemplateRows(cycle: any) {
 }
 
 function getWorksheetMerges() {
-  const merge = (s: string, e: string) => ({ s: XLSX.utils.decode_cell(s), e: XLSX.utils.decode_cell(e) });
-
   return [
-    merge("B4", "BJ4"),
-    merge("D7", "E7"),
-    merge("K7", "N7"),
-    merge("O7", "U7"),
-    merge("V7", "AA7"),
-    merge("AD7", "AF7"),
-    merge("AG7", "AJ7"),
-    merge("AL7", "AN7"),
-    merge("AO7", "AQ7"),
-    merge("AT7", "AX7"),
+    ["B4", "BJ4"],
+    ["D7", "E7"],
+    ["K7", "N7"],
+    ["O7", "U7"],
+    ["V7", "AA7"],
+    ["AD7", "AF7"],
+    ["AG7", "AJ7"],
+    ["AL7", "AN7"],
+    ["AO7", "AQ7"],
+    ["AT7", "AX7"],
     ...[
       "A",
       "B",
@@ -176,7 +174,7 @@ function getWorksheetMerges() {
       "BH",
       "BI",
       "BJ",
-    ].map((column) => merge(`${column}7`, `${column}8`)),
+    ].map((column) => [`${column}7`, `${column}8`]),
   ];
 }
 
@@ -326,6 +324,110 @@ function buildGroupedPayrollRows(rows: any[]) {
   return result;
 }
 
+function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
+  worksheet.views = [{ state: "frozen", xSplit: 3, ySplit: 8 }];
+  worksheet.pageSetup = {
+    orientation: "landscape",
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    paperSize: 9,
+  };
+
+  worksheet.columns = [
+    { width: 7 },
+    { width: 15 },
+    { width: 28 },
+    { width: 8 },
+    { width: 8 },
+    { width: 18 },
+    { width: 14 },
+    ...Array.from({ length: 55 }, () => ({ width: 14 })),
+  ];
+
+  worksheet.getRow(1).height = 24;
+  worksheet.getRow(2).height = 22;
+  worksheet.getRow(3).height = 20;
+  worksheet.getRow(4).height = 32;
+  worksheet.getRow(5).height = 20;
+  worksheet.getRow(6).height = 18;
+  worksheet.getRow(7).height = 42;
+  worksheet.getRow(8).height = 58;
+
+  for (const [startCell, endCell] of getWorksheetMerges()) {
+    worksheet.mergeCells(`${startCell}:${endCell}`);
+  }
+
+  const thinBorder: Partial<ExcelJS.Borders> = {
+    top: { style: "thin", color: { argb: "FFCBD5E1" } },
+    left: { style: "thin", color: { argb: "FFCBD5E1" } },
+    bottom: { style: "thin", color: { argb: "FFCBD5E1" } },
+    right: { style: "thin", color: { argb: "FFCBD5E1" } },
+  };
+
+  worksheet.eachRow((row, rowNumber) => {
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      cell.border = thinBorder;
+      cell.font = { name: "Arial", size: 10 };
+
+      if (rowNumber >= 9 && typeof cell.value === "number") {
+        cell.numFmt = "#,##0";
+      }
+    });
+  });
+
+  worksheet.getCell("B1").font = { name: "Arial", size: 13, bold: true };
+  worksheet.getCell("B1").alignment = { horizontal: "left", vertical: "middle" };
+  worksheet.getCell("B2").font = { name: "Arial", size: 10, italic: true, color: { argb: "FF475569" } };
+  worksheet.getCell("B2").alignment = { horizontal: "left", vertical: "middle" };
+  worksheet.getCell("B4").font = { name: "Arial", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+  worksheet.getCell("B4").alignment = { horizontal: "center", vertical: "middle" };
+  worksheet.getCell("B4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D4ED8" } };
+
+  for (let column = 1; column <= 62; column++) {
+    const numberCell = worksheet.getRow(6).getCell(column);
+    numberCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
+    numberCell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF1E3A8A" } };
+
+    for (const rowNumber of [7, 8]) {
+      const cell = worksheet.getRow(rowNumber).getCell(column);
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: rowNumber === 7 ? "FFDBEAFE" : "FFFFF7ED" },
+      };
+      cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF0F172A" } };
+    }
+  }
+
+  for (let rowNumber = 9; rowNumber <= totalRows; rowNumber++) {
+    const row = worksheet.getRow(rowNumber);
+    const isDepartmentRow = typeof row.getCell(1).value === "string" && !String(row.getCell(2).value || "").match(/^\d|[A-Z0-9]+$/);
+    const fillColor = isDepartmentRow ? "FFE2E8F0" : rowNumber % 2 === 0 ? "FFFFFFFF" : "FFF8FAFC";
+
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
+      cell.font = { name: "Arial", size: 10, bold: isDepartmentRow, color: { argb: "FF0F172A" } };
+      cell.alignment = {
+        vertical: "middle",
+        horizontal: typeof cell.value === "number" ? "right" : "center",
+        wrapText: true,
+      };
+    });
+
+    if (isDepartmentRow) {
+      row.height = 24;
+      row.getCell(2).alignment = { vertical: "middle", horizontal: "left", wrapText: true };
+    }
+  }
+
+  worksheet.autoFilter = {
+    from: { row: 8, column: 1 },
+    to: { row: 8, column: 62 },
+  };
+}
+
 export class PayrollExportService {
   static async exportPayrollWorkbook(cycleId: string, source: PayrollExportSource) {
     const cycle = await queryOne(
@@ -364,29 +466,15 @@ export class PayrollExportService {
 
     const headerRows = buildTemplateRows(cycle);
     const dataRows = buildGroupedPayrollRows(rows);
-    const worksheet = XLSX.utils.aoa_to_sheet([...headerRows, ...dataRows]);
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "CT Apparel";
+    workbook.created = new Date();
 
-    worksheet["!merges"] = getWorksheetMerges();
-    worksheet["!rows"] = [
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 20 },
-      { hpt: 28 },
-      { hpt: 20 },
-      { hpt: 18 },
-      { hpt: 42 },
-      { hpt: 52 },
-    ];
-    worksheet["!cols"] = [
-      { wch: 6 },
-      { wch: 14 },
-      { wch: 26 },
-      ...Array.from({ length: 59 }, () => ({ wch: 14 })),
-    ];
+    const worksheet = workbook.addWorksheet("2. BẢNG LƯƠNG");
+    [...headerRows, ...dataRows].forEach((row) => worksheet.addRow(row));
+    applyWorksheetLayout(worksheet, headerRows.length + dataRows.length);
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Bang luong");
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     return {
       buffer,
