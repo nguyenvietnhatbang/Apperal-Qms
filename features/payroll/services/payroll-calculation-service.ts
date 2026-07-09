@@ -46,6 +46,7 @@ export class PayrollCalculationService {
       // 4. Clear existing calculations for this cycle
       await client.query(`DELETE FROM payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
 
+      const periodStartStr = new Date(cycle.period_start).toISOString().split("T")[0];
       const periodEndStr = new Date(cycle.period_end).toISOString().split("T")[0];
       const salaryConfigsRes = employeeIds.length > 0
         ? await client.query(
@@ -60,9 +61,9 @@ export class PayrollCalculationService {
              FROM employee_salary_configs
              WHERE employee_id = ANY($1::uuid[])
                AND effective_from <= $2::date
-               AND (effective_to IS NULL OR effective_to >= $2::date)
+               AND (effective_to IS NULL OR effective_to >= $3::date)
              ORDER BY employee_id, effective_from DESC`,
-            [employeeIds, periodEndStr]
+            [employeeIds, periodEndStr, periodStartStr]
           )
         : { rows: [] };
       const salaryConfigByEmployeeId = new Map<string, any>(
@@ -71,7 +72,17 @@ export class PayrollCalculationService {
 
       const attendanceTotalsRes = employeeIds.length > 0
         ? await client.query(
-            `SELECT employee_id as "employeeId",
+            `WITH cycle_attendance AS (
+               SELECT DISTINCT ON (employee_id, work_date)
+                      employee_id, work_date, symbol, workday_count,
+                      overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours
+               FROM attendance_records
+               WHERE employee_id = ANY($1::uuid[])
+                 AND work_date >= $2::date
+                 AND work_date <= $3::date
+               ORDER BY employee_id, work_date, updated_at DESC, created_at DESC, id DESC
+             )
+             SELECT employee_id as "employeeId",
                     COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN', 'P') THEN 1 ELSE 0 END), 0) as "paidLeaveDays",
                     COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L', 'LE') THEN 1 ELSE 0 END), 0) as "holidayDays",
                     COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('RO', 'KP') THEN 1 ELSE 0 END), 0) as "unpaidLeaveDays",
@@ -79,15 +90,18 @@ export class PayrollCalculationService {
                     COALESCE(SUM(overtime_normal_hours), 0) as "overtimeNormalHours",
                     COALESCE(SUM(overtime_sunday_hours), 0) as "overtimeSundayHours",
                     COALESCE(SUM(overtime_holiday_hours), 0) as "overtimeHolidayHours"
-             FROM attendance_records
-             WHERE payroll_cycle_id = $1 AND employee_id = ANY($2::uuid[])
+             FROM cycle_attendance
              GROUP BY employee_id`,
-            [cycleId, employeeIds]
+            [employeeIds, periodStartStr, periodEndStr]
           )
         : { rows: [] };
       const attendanceTotalsByEmployeeId = new Map<string, any>(
         attendanceTotalsRes.rows.map((attendance: any) => [attendance.employeeId, attendance])
       );
+      if (attendanceTotalsByEmployeeId.size === 0) {
+        throw new Error("Không có dữ liệu chấm công trong khoảng ngày của chu kỳ lương.");
+      }
+
       const payrollRows: any[] = [];
       const payrollLinesByEmployeeId = new Map<string, any[]>();
 
@@ -101,6 +115,8 @@ export class PayrollCalculationService {
         }
 
         const attendanceTotals = attendanceTotalsByEmployeeId.get(emp.id);
+        if (!attendanceTotals) continue;
+
         const actualWorkdays = parseFloat(attendanceTotals?.actualWorkdays || 0);
         const paidLeaveDays = parseFloat(attendanceTotals?.paidLeaveDays || 0);
         const holidayDays = parseFloat(attendanceTotals?.holidayDays || 0);

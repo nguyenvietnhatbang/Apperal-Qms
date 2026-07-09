@@ -883,7 +883,13 @@ export default function PayrollDashboardClient({
   };
 
   const handleCycleDelete = async (cycleId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa chu kỳ này? Mọi chấm công và bảng lương liên quan sẽ bị xóa!")) return;
+    const cycle = cycles.find((item) => item.id === cycleId);
+    if (cycle && cycle.status !== "draft" && cycle.status !== "cancelled") {
+      alert("Chỉ có thể xóa chu kỳ ở trạng thái Nháp hoặc Đã hủy. Chu kỳ đã chốt không được xóa.");
+      return;
+    }
+
+    if (!confirm("Bạn có chắc chắn muốn xóa chu kỳ nháp/đã hủy này? Mọi dữ liệu liên quan đến chu kỳ sẽ bị xóa.")) return;
     try {
       setIsLoading(true);
       const res = await fetch(`/api/payroll/cycles/${cycleId}`, { method: "DELETE" });
@@ -2108,10 +2114,7 @@ export default function PayrollDashboardClient({
                               <td className="px-6 py-4">{getStatusBadge(c.status)}</td>
                               <td className="px-6 py-4 text-right">
                                 <div className="flex justify-end items-center gap-2">
-                                  {c.status === "draft" && (
-                                    <span className="text-xs text-zinc-400 italic">Vui lòng import chấm công trước</span>
-                                  )}
-                                  {(c.status === "imported" || c.status === "cleaned") && (
+                                  {(c.status === "draft" || c.status === "imported" || c.status === "cleaned") && (
                                     <button
                                       onClick={() => handleCalculatePayroll(c.id)}
                                       className="px-2.5 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-white rounded-lg text-xs font-bold cursor-pointer"
@@ -2151,9 +2154,9 @@ export default function PayrollDashboardClient({
                               <td className="px-6 py-4 sticky right-0 bg-white border-l border-zinc-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
                                 <button
                                   onClick={() => handleCycleDelete(c.id)}
-                                  disabled={c.status === "locked" || c.status === "paid"}
+                                  disabled={c.status !== "draft" && c.status !== "cancelled"}
                                   className="icon-btn-danger hover:bg-red-50 hover:text-red-700 rounded-lg p-1.5 disabled:opacity-30 cursor-pointer"
-                                  title="Xóa chu kỳ"
+                                  title={c.status === "draft" || c.status === "cancelled" ? "Xóa chu kỳ" : "Chỉ chu kỳ Nháp hoặc Đã hủy mới được xóa"}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                 </button>

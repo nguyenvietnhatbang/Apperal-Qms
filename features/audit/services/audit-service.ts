@@ -99,14 +99,25 @@ export class AuditService {
       const yearStart = `${new Date(cycle.period_start).getUTCFullYear()}-01-01`;
 
       const sourceRes = await client.query(
-        `SELECT id, payroll_cycle_id, employee_id, employee_code, employee_name, work_date, weekday_name,
+        `WITH cycle_attendance AS (
+           SELECT DISTINCT ON (COALESCE(employee_id::text, employee_code), work_date)
+                  id, payroll_cycle_id, employee_id, employee_code, employee_name, work_date, weekday_name,
+                  department_name, position_title, shift_name, check_in_1, check_out_1, check_in_2, check_out_2,
+                  check_in_3, check_out_3, workday_count, work_hours, late_minutes, early_leave_minutes,
+                  overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, symbol, extra_symbol, total_hours,
+                  updated_at, created_at
+           FROM attendance_records
+           WHERE work_date >= $1::date
+             AND work_date <= $2::date
+           ORDER BY COALESCE(employee_id::text, employee_code), work_date, updated_at DESC, created_at DESC, id DESC
+         )
+         SELECT id, payroll_cycle_id, employee_id, employee_code, employee_name, work_date, weekday_name,
                 department_name, position_title, shift_name, check_in_1, check_out_1, check_in_2, check_out_2,
                 check_in_3, check_out_3, workday_count, work_hours, late_minutes, early_leave_minutes,
                 overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, symbol, extra_symbol, total_hours
-         FROM attendance_records
-         WHERE payroll_cycle_id = $1
+         FROM cycle_attendance
          ORDER BY employee_code ASC, work_date ASC`,
-        [cycleId]
+        [cycle.period_start, cycle.period_end]
       );
 
       await client.query(`DELETE FROM audit_payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
@@ -268,7 +279,7 @@ export class AuditService {
 
     return await transaction(async (client) => {
       const cycleRes = await client.query(
-        `SELECT id, code, period_end, standard_workdays, standard_hours_per_day, status
+        `SELECT id, code, period_start, period_end, standard_workdays, standard_hours_per_day, status
          FROM payroll_cycles
          WHERE id = $1`,
         [cycleId]
@@ -306,6 +317,7 @@ export class AuditService {
       const employeeIds = employeesRes.rows.map((employee: any) => employee.id);
 
       await client.query(`DELETE FROM audit_payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
+      const periodStartStr = new Date(cycle.period_start).toISOString().split("T")[0];
       const periodEndStr = new Date(cycle.period_end).toISOString().split("T")[0];
       const salaryConfigsRes = employeeIds.length > 0
         ? await client.query(
@@ -320,9 +332,9 @@ export class AuditService {
              FROM employee_salary_configs
              WHERE employee_id = ANY($1::uuid[])
                AND effective_from <= $2::date
-               AND (effective_to IS NULL OR effective_to >= $2::date)
+               AND (effective_to IS NULL OR effective_to >= $3::date)
              ORDER BY employee_id, effective_from DESC`,
-            [employeeIds, periodEndStr]
+            [employeeIds, periodEndStr, periodStartStr]
           )
         : { rows: [] };
       const salaryConfigByEmployeeId = new Map<string, any>(

@@ -423,18 +423,38 @@ export class AttendanceCleaningService {
   }
 
   /**
-   * Get cleaned records for a cycle
+   * Get cleaned records whose work dates fall inside the selected cycle period.
    */
   static async getRecordsByCycleId(cycleId: string, search?: string) {
-    let sql = `SELECT id, employee_code as "employeeCode", employee_name as "employeeName", work_date as "workDate",
+    let sql = `WITH selected_cycle AS (
+                 SELECT period_start, period_end
+                 FROM payroll_cycles
+                 WHERE id = $1
+               ),
+               cycle_attendance AS (
+                 SELECT DISTINCT ON (COALESCE(ar.employee_id::text, ar.employee_code), ar.work_date)
+                        ar.id, ar.employee_code, ar.employee_name, ar.work_date,
+                        ar.weekday_name, ar.department_name, ar.position_title,
+                        ar.shift_name, ar.check_in_1, ar.check_out_1,
+                        ar.check_in_2, ar.check_out_2, ar.workday_count,
+                        ar.work_hours, ar.late_minutes, ar.early_leave_minutes,
+                        ar.overtime_normal_hours, ar.overtime_sunday_hours,
+                        ar.overtime_holiday_hours, ar.symbol, ar.total_hours
+                 FROM attendance_records ar
+                 CROSS JOIN selected_cycle sc
+                 WHERE ar.work_date >= sc.period_start
+                   AND ar.work_date <= sc.period_end
+                 ORDER BY COALESCE(ar.employee_id::text, ar.employee_code), ar.work_date, ar.updated_at DESC, ar.created_at DESC, ar.id DESC
+               )
+               SELECT id, employee_code as "employeeCode", employee_name as "employeeName", work_date as "workDate",
                       weekday_name as "weekdayName", department_name as "departmentName", position_title as "positionTitle",
                       shift_name as "shiftName", check_in_1 as "checkIn1", check_out_1 as "checkOut1",
                       check_in_2 as "checkIn2", check_out_2 as "checkOut2", workday_count as "workdayCount",
                       work_hours as "workHours", late_minutes as "lateMinutes", early_leave_minutes as "earlyLeaveMinutes",
                       overtime_normal_hours as "overtimeNormalHours", overtime_sunday_hours as "overtimeSundayHours",
                       overtime_holiday_hours as "overtimeHolidayHours", symbol, total_hours as "totalHours"
-               FROM attendance_records
-               WHERE payroll_cycle_id = $1`;
+               FROM cycle_attendance
+               WHERE true`;
     const params: any[] = [cycleId];
 
     if (search) {
