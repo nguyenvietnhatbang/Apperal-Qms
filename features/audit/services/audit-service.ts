@@ -83,15 +83,15 @@ export class AuditService {
     return mapAuditConfig(updated);
   }
 
-  static async generateAuditAttendance(cycleId: string, actorId: string) {
+  static async generateAuditAttendance(cycleId: string, actorId: string, factoryId: string) {
     const config = await this.getActiveConfig();
 
     return await transaction(async (client) => {
       const cycleRes = await client.query(
-        `SELECT id, code, period_start, period_end
+        `SELECT id, factory_id, code, period_start, period_end
          FROM payroll_cycles
-         WHERE id = $1`,
-        [cycleId]
+         WHERE id = $1 AND factory_id = $2`,
+        [cycleId, factoryId]
       );
       if (cycleRes.rows.length === 0) throw new Error("Không tìm thấy chu kỳ lương.");
 
@@ -109,6 +109,9 @@ export class AuditService {
            FROM attendance_records
            WHERE work_date >= $1::date
              AND work_date <= $2::date
+             AND employee_id IN (
+               SELECT id FROM employees WHERE factory_id = $3 AND deleted_at IS NULL
+             )
            ORDER BY COALESCE(employee_id::text, employee_code), work_date, updated_at DESC, created_at DESC, id DESC
          )
          SELECT id, payroll_cycle_id, employee_id, employee_code, employee_name, work_date, weekday_name,
@@ -117,7 +120,7 @@ export class AuditService {
                 overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, symbol, extra_symbol, total_hours
          FROM cycle_attendance
          ORDER BY employee_code ASC, work_date ASC`,
-        [cycle.period_start, cycle.period_end]
+        [cycle.period_start, cycle.period_end, cycle.factory_id]
       );
 
       await client.query(`DELETE FROM audit_payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
@@ -129,9 +132,14 @@ export class AuditService {
       const yearTotalsRes = await client.query(
         `SELECT employee_code, COALESCE(SUM(overtime_normal_hours), 0) as total
          FROM audit_attendance_records
-         WHERE work_date >= $1 AND work_date < $2 AND payroll_cycle_id <> $3
+         WHERE work_date >= $1
+           AND work_date < $2
+           AND payroll_cycle_id <> $3
+           AND employee_id IN (
+             SELECT id FROM employees WHERE factory_id = $4 AND deleted_at IS NULL
+           )
          GROUP BY employee_code`,
-        [yearStart, cycle.period_start, cycleId]
+        [yearStart, cycle.period_start, cycleId, cycle.factory_id]
       );
       for (const row of yearTotalsRes.rows) {
         employeeYearTotals.set(row.employee_code, toNumber(row.total));
@@ -274,15 +282,15 @@ export class AuditService {
     });
   }
 
-  static async calculateAuditPayroll(cycleId: string, actorId: string) {
+  static async calculateAuditPayroll(cycleId: string, actorId: string, factoryId: string) {
     const config = await this.getActiveConfig();
 
     return await transaction(async (client) => {
       const cycleRes = await client.query(
-        `SELECT id, code, period_start, period_end, standard_workdays, standard_hours_per_day, status
+        `SELECT id, factory_id, code, period_start, period_end, standard_workdays, standard_hours_per_day, status
          FROM payroll_cycles
-         WHERE id = $1`,
-        [cycleId]
+         WHERE id = $1 AND factory_id = $2`,
+        [cycleId, factoryId]
       );
       if (cycleRes.rows.length === 0) throw new Error("Không tìm thấy chu kỳ lương.");
 
@@ -311,8 +319,9 @@ export class AuditService {
       const employeesRes = await client.query(
         `SELECT id, employee_code, full_name, gender, dependent_count, has_child_under_6
          FROM employees
-         WHERE deleted_at IS NULL AND status = 'active'
-         ORDER BY employee_code ASC`
+         WHERE deleted_at IS NULL AND status = 'active' AND factory_id = $1
+         ORDER BY employee_code ASC`,
+        [cycle.factory_id]
       );
       const employeeIds = employeesRes.rows.map((employee: any) => employee.id);
 
@@ -569,7 +578,7 @@ export class AuditService {
     });
   }
 
-  static async getAuditAttendanceRecords(cycleId: string, search?: string) {
+  static async getAuditAttendanceRecords(cycleId: string, factoryId: string, search?: string) {
     let sql = `SELECT id, employee_code as "employeeCode", employee_name as "employeeName", work_date as "workDate",
                       weekday_name as "weekdayName", department_name as "departmentName", position_title as "positionTitle",
                       shift_name as "shiftName", check_in_1 as "checkIn1", check_out_1 as "checkOut1",
@@ -582,11 +591,16 @@ export class AuditService {
                       early_leave_minutes as "earlyLeaveMinutes", symbol, total_hours as "totalHours",
                       adjustment_reason as "adjustmentReason", note
                FROM audit_attendance_records
-               WHERE payroll_cycle_id = $1`;
-    const params: string[] = [cycleId];
+               WHERE payroll_cycle_id = $1
+                 AND EXISTS (
+                   SELECT 1 FROM payroll_cycles c
+                   WHERE c.id = audit_attendance_records.payroll_cycle_id
+                     AND c.factory_id = $2
+                 )`;
+    const params: string[] = [cycleId, factoryId];
 
     if (search) {
-      sql += ` AND (employee_code ILIKE $2 OR employee_name ILIKE $2 OR department_name ILIKE $2)`;
+      sql += ` AND (employee_code ILIKE $3 OR employee_name ILIKE $3 OR department_name ILIKE $3)`;
       params.push(`%${search}%`);
     }
 
@@ -594,7 +608,7 @@ export class AuditService {
     return await query(sql, params);
   }
 
-  static async getAuditPayrollItems(cycleId: string, search?: string) {
+  static async getAuditPayrollItems(cycleId: string, factoryId: string, search?: string) {
     let sql = `SELECT id, payroll_cycle_id as "payrollCycleId", employee_id as "employeeId",
                       employee_code as "employeeCode", employee_name as "employeeName",
                       actual_workdays as "actualWorkdays", paid_leave_days as "paidLeaveDays",
@@ -609,11 +623,16 @@ export class AuditService {
                       total_deduction as "totalDeduction", net_salary as "netSalary",
                       second_payment_amount as "secondPaymentAmount", note, calculated_at as "calculatedAt"
                FROM audit_payroll_items
-               WHERE payroll_cycle_id = $1`;
-    const params: string[] = [cycleId];
+               WHERE payroll_cycle_id = $1
+                 AND EXISTS (
+                   SELECT 1 FROM payroll_cycles c
+                   WHERE c.id = audit_payroll_items.payroll_cycle_id
+                     AND c.factory_id = $2
+                 )`;
+    const params: string[] = [cycleId, factoryId];
 
     if (search) {
-      sql += ` AND (employee_code ILIKE $2 OR employee_name ILIKE $2)`;
+      sql += ` AND (employee_code ILIKE $3 OR employee_name ILIKE $3)`;
       params.push(`%${search}%`);
     }
 

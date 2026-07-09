@@ -52,12 +52,6 @@ export default function AuthDashboardClient({
     setPageFactories(1);
   }, [activeTab]);
 
-  useEffect(() => {
-    if (currentUser.isSystemAdmin) {
-      void refreshData(selectedFactoryId);
-    }
-  }, [selectedFactoryId]);
-
   // Dialog State
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -117,6 +111,12 @@ export default function AuthDashboardClient({
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (currentUser.isSystemAdmin) {
+      void refreshData(selectedFactoryId);
+    }
+  }, [selectedFactoryId]);
 
   // Open User Modal
   const openUserModal = (userItem: any = null) => {
@@ -1274,6 +1274,98 @@ export default function AuthDashboardClient({
                 <button
                   type="button"
                   onClick={() => setDeptModalOpen(false)}
+                  className="btn-secondary rounded-xl text-sm px-4 py-2 cursor-pointer font-semibold"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="btn-primary bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm px-4 py-2 cursor-pointer font-semibold shadow-md shadow-blue-500/10 flex items-center gap-2"
+                >
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>Lưu</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {factoryModalOpen && currentUser.isSystemAdmin && (
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-zinc-250 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden animate-zoomIn">
+            <div className="px-6 py-4 border-b border-zinc-150 bg-zinc-50 flex justify-between items-center">
+              <h3 className="font-bold text-md text-zinc-800">
+                {selectedFactory ? "Chỉnh sửa xưởng" : "Tạo xưởng mới"}
+              </h3>
+              <button onClick={() => setFactoryModalOpen(false)} className="text-zinc-400 hover:text-zinc-600 cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleFactorySubmit}>
+              <div className="p-6 space-y-4">
+                {factoryFormError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4" />
+                    <span>{factoryFormError}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">Mã xưởng *</label>
+                    <input
+                      type="text"
+                      value={factoryCodeForm}
+                      onChange={(e) => setFactoryCodeForm(e.target.value)}
+                      placeholder="vd: xuong-a"
+                      disabled={selectedFactory?.code === "default"}
+                      className="input rounded-xl border-zinc-250 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">Tên xưởng *</label>
+                    <input
+                      type="text"
+                      value={factoryNameForm}
+                      onChange={(e) => setFactoryNameForm(e.target.value)}
+                      placeholder="vd: Xưởng A"
+                      className="input rounded-xl border-zinc-250 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">Mô tả</label>
+                  <textarea
+                    value={factoryDescForm}
+                    onChange={(e) => setFactoryDescForm(e.target.value)}
+                    placeholder="Ghi chú về nhà xưởng, chi nhánh hoặc khu sản xuất..."
+                    rows={3}
+                    className="input rounded-xl border-zinc-250 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm resize-none py-2"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-sm font-semibold text-zinc-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={factoryIsActiveForm}
+                    onChange={(e) => setFactoryIsActiveForm(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-zinc-300 rounded focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Xưởng đang hoạt động</span>
+                </label>
+              </div>
+
+              <div className="px-6 py-4 border-t border-zinc-150 bg-zinc-50 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFactoryModalOpen(false)}
                   className="btn-secondary rounded-xl text-sm px-4 py-2 cursor-pointer font-semibold"
                 >
                   Hủy

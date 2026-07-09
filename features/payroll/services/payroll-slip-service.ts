@@ -4,7 +4,7 @@ export class PayrollSlipService {
   /**
    * Get all calculated payroll items for a given cycle (compiled payroll sheet)
    */
-  static async getPayrollItems(cycleId: string, search?: string) {
+  static async getPayrollItems(cycleId: string, factoryId: string, search?: string) {
     let sql = `SELECT id, payroll_cycle_id as "payrollCycleId", employee_id as "employeeId",
                       employee_code as "employeeCode", employee_name as "employeeName",
                       actual_workdays as "actualWorkdays", paid_leave_days as "paidLeaveDays",
@@ -20,11 +20,16 @@ export class PayrollSlipService {
                       total_deduction as "totalDeduction", net_salary as "netSalary",
                       second_payment_amount as "secondPaymentAmount", note, calculated_at as "calculatedAt"
                FROM payroll_items
-               WHERE payroll_cycle_id = $1`;
-    const params: any[] = [cycleId];
+               WHERE payroll_cycle_id = $1
+                 AND EXISTS (
+                   SELECT 1 FROM payroll_cycles c
+                   WHERE c.id = payroll_items.payroll_cycle_id
+                     AND c.factory_id = $2
+                 )`;
+    const params: any[] = [cycleId, factoryId];
 
     if (search) {
-      sql += ` AND (employee_code ILIKE $2 OR employee_name ILIKE $2)`;
+      sql += ` AND (employee_code ILIKE $3 OR employee_name ILIKE $3)`;
       params.push(`%${search}%`);
     }
 
@@ -36,7 +41,7 @@ export class PayrollSlipService {
   /**
    * Get detailed payslip for a specific employee in a cycle
    */
-  static async getPayslip(cycleId: string, employeeId: string) {
+  static async getPayslip(cycleId: string, employeeId: string, factoryId: string) {
     // Get payroll item details
     const item = await queryOne(
       `SELECT id, payroll_cycle_id as "payrollCycleId", employee_id as "employeeId",
@@ -55,8 +60,14 @@ export class PayrollSlipService {
               total_deduction as "totalDeduction", net_salary as "netSalary",
               second_payment_amount as "secondPaymentAmount", note, calculated_at as "calculatedAt"
        FROM payroll_items
-       WHERE payroll_cycle_id = $1 AND employee_id = $2`,
-      [cycleId, employeeId]
+       WHERE payroll_cycle_id = $1
+         AND employee_id = $2
+         AND EXISTS (
+           SELECT 1 FROM payroll_cycles c
+           WHERE c.id = payroll_items.payroll_cycle_id
+             AND c.factory_id = $3
+         )`,
+      [cycleId, employeeId, factoryId]
     );
 
     if (!item) return null;
@@ -75,8 +86,8 @@ export class PayrollSlipService {
     const cycle = await queryOne(
       `SELECT code, name, period_start as "periodStart", period_end as "periodEnd"
        FROM payroll_cycles
-       WHERE id = $1`,
-      [cycleId]
+       WHERE id = $1 AND factory_id = $2`,
+      [cycleId, factoryId]
     );
 
     return {

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { UserService } from "@/features/admin/services/user-service";
+import { FactoryService } from "@/features/admin/services/factory-service";
 import { ApiResponse } from "@/lib/api-response";
 
 const registerSchema = z.object({
@@ -39,8 +40,13 @@ export async function POST(request: NextRequest) {
     }
 
     const { username, displayName, email, password } = parsed.data;
+    const defaultFactory = await FactoryService.getDefaultFactory();
+    if (!defaultFactory) {
+      return ApiResponse.error("Chưa có xưởng mặc định để đăng ký tài khoản.", "DEFAULT_FACTORY_MISSING", undefined, 500);
+    }
 
     const newUser = await UserService.createUser({
+      factoryId: defaultFactory.id,
       username: username.toLowerCase(),
       displayName,
       email: email || null,

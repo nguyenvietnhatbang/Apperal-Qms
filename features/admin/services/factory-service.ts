@@ -33,6 +33,14 @@ export class FactoryService {
     );
   }
 
+  static async getDefaultFactory() {
+    return await queryOne(
+      `SELECT id, code, name, description, is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
+       FROM factories
+       WHERE code = 'default' AND deleted_at IS NULL`
+    );
+  }
+
   static async createFactory(data: FactoryData, actorId: string) {
     return await queryOne(
       `INSERT INTO factories (code, name, description, is_active, created_by)

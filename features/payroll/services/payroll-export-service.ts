@@ -429,13 +429,13 @@ function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
 }
 
 export class PayrollExportService {
-  static async exportPayrollWorkbook(cycleId: string, source: PayrollExportSource) {
+  static async exportPayrollWorkbook(cycleId: string, source: PayrollExportSource, factoryId: string) {
     const cycle = await queryOne(
       `SELECT code, name, period_start as "periodStart", period_end as "periodEnd",
               standard_workdays as "standardWorkdays"
        FROM payroll_cycles
-       WHERE id = $1`,
-      [cycleId]
+       WHERE id = $1 AND factory_id = $2`,
+      [cycleId, factoryId]
     );
 
     if (!cycle) throw new Error("Không tìm thấy chu kỳ lương.");

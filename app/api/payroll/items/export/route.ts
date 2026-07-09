@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { PayrollExportService } from "@/features/payroll/services/payroll-export-service";
 import { ApiResponse } from "@/lib/api-response";
+import { getCurrentUser } from "@/lib/auth-session";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,10 @@ export async function GET(request: NextRequest) {
       return ApiResponse.badRequest("Mã chu kỳ thanh toán (cycleId) là bắt buộc.", "MISSING_FIELDS");
     }
 
-    const exportResult = await PayrollExportService.exportPayrollWorkbook(cycleId, source);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    const exportResult = await PayrollExportService.exportPayrollWorkbook(cycleId, source, currentUser.factoryId);
 
     return new Response(new Uint8Array(exportResult.buffer), {
       headers: {

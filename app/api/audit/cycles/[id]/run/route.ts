@@ -23,8 +23,8 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
 
     const { id } = await context.params;
-    const attendance = await AuditService.generateAuditAttendance(id, currentUser.id);
-    const payroll = await AuditService.calculateAuditPayroll(id, currentUser.id);
+    const attendance = await AuditService.generateAuditAttendance(id, currentUser.id, currentUser.factoryId);
+    const payroll = await AuditService.calculateAuditPayroll(id, currentUser.id, currentUser.factoryId);
 
     return ApiResponse.success({ attendance, payroll });
   } catch (error: unknown) {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { PayrollSlipService } from "@/features/payroll/services/payroll-slip-service";
 import { ApiResponse } from "@/lib/api-response";
+import { getCurrentUser } from "@/lib/auth-session";
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,16 +20,19 @@ export async function GET(request: NextRequest) {
       return ApiResponse.badRequest("Mã chu kỳ thanh toán (cycleId) là bắt buộc.", "MISSING_FIELDS");
     }
 
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
     if (employeeId) {
       // Get detailed payslip
-      const payslip = await PayrollSlipService.getPayslip(cycleId, employeeId);
+      const payslip = await PayrollSlipService.getPayslip(cycleId, employeeId, currentUser.factoryId);
       if (!payslip) {
         return ApiResponse.notFound("Không tìm thấy phiếu lương.");
       }
       return ApiResponse.success(payslip);
     } else {
       // Get compiled payroll sheet
-      const payrollItems = await PayrollSlipService.getPayrollItems(cycleId, search);
+      const payrollItems = await PayrollSlipService.getPayrollItems(cycleId, currentUser.factoryId, search);
       return ApiResponse.success(payrollItems);
     }
   } catch (error: any) {
