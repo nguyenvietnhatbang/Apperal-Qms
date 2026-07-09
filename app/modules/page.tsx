@@ -78,7 +78,7 @@ export default async function ModulesPage() {
               CT
             </div>
             <div>
-              <p className="text-lg font-black tracking-tight text-slate-950">CT Apparel</p>
+              <p className="text-lg font-black tracking-tight text-slate-950">IRT Eco</p>
               <p className="text-xs font-semibold text-slate-500">Internal Operations</p>
             </div>
           </div>
@@ -191,7 +191,7 @@ export default async function ModulesPage() {
       <footer className="mt-10 border-t border-slate-200 py-6 text-center text-sm font-medium text-slate-500">
         <span className="inline-flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-blue-500" />
-          © 2026 CT Apparel. Hệ thống quản lý nội bộ.
+          © 2026 IRT Eco. Hệ thống quản lý nội bộ.
         </span>
       </footer>
     </div>
