@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, User, AlertCircle, Loader2 } from "lucide-react";
 
@@ -193,12 +192,6 @@ export default function LoginPage() {
                 )}
               </button>
 
-              <div className="text-center text-sm font-medium text-slate-600">
-                Người dùng mới?{" "}
-                <Link href="/register" className="font-bold text-blue-600 transition hover:text-blue-500">
-                  Đăng ký tài khoản
-                </Link>
-              </div>
             </form>
 
             <div className="mt-10 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700">
