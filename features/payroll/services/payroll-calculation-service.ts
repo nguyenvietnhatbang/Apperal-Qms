@@ -103,6 +103,38 @@ export class PayrollCalculationService {
         throw new Error("Không có dữ liệu chấm công trong khoảng ngày của chu kỳ lương.");
       }
 
+      const adjustmentsRes = employeeIds.length > 0
+        ? await client.query(
+            `SELECT employee_id as "employeeId",
+                    annual_leave_total as "annualLeaveTotal",
+                    paid_leave_hours as "paidLeaveHours",
+                    annual_leave_used_cumulative as "annualLeaveUsedCumulative",
+                    annual_leave_remaining as "annualLeaveRemaining",
+                    personal_leave_days as "personalLeaveDays",
+                    personal_leave_amount as "personalLeaveAmount",
+                    business_trip_allowance as "businessTripAllowance",
+                    compliance_bonus as "complianceBonus",
+                    work_trip_support as "workTripSupport",
+                    night_shift_hours as "nightShiftHours",
+                    night_shift_amount as "nightShiftAmount",
+                    excess_overtime_normal_hours as "excessOvertimeNormalHours",
+                    excess_overtime_sunday_hours as "excessOvertimeSundayHours",
+                    excess_overtime_holiday_hours as "excessOvertimeHolidayHours",
+                    excess_overtime_normal_amount as "excessOvertimeNormalAmount",
+                    excess_overtime_sunday_amount as "excessOvertimeSundayAmount",
+                    excess_overtime_holiday_amount as "excessOvertimeHolidayAmount",
+                    advance_payment_1 as "advancePayment1",
+                    advance_payment_2 as "advancePayment2",
+                    pending_leave_advance as "pendingLeaveAdvance"
+             FROM payroll_adjustments
+             WHERE payroll_cycle_id = $1 AND employee_id = ANY($2::uuid[])`,
+            [cycleId, employeeIds]
+          )
+        : { rows: [] };
+      const adjustmentsByEmployeeId = new Map<string, any>(
+        adjustmentsRes.rows.map((adjustment: any) => [adjustment.employeeId, adjustment])
+      );
+
       const payrollRows: any[] = [];
       const payrollLinesByEmployeeId = new Map<string, any[]>();
 
@@ -125,6 +157,24 @@ export class PayrollCalculationService {
         const overtimeNormalHours = parseFloat(attendanceTotals?.overtimeNormalHours || 0);
         const overtimeSundayHours = parseFloat(attendanceTotals?.overtimeSundayHours || 0);
         const overtimeHolidayHours = parseFloat(attendanceTotals?.overtimeHolidayHours || 0);
+        const adjustment = adjustmentsByEmployeeId.get(emp.id) || {};
+        const annualLeaveTotal = parseFloat(adjustment.annualLeaveTotal || 0);
+        const paidLeaveHours = parseFloat(adjustment.paidLeaveHours || 0);
+        const annualLeaveUsedCumulative = parseFloat(adjustment.annualLeaveUsedCumulative || 0);
+        const annualLeaveRemaining = parseFloat(adjustment.annualLeaveRemaining || 0);
+        const personalLeaveDays = parseFloat(adjustment.personalLeaveDays || unpaidLeaveDays || 0);
+        const personalLeaveAmount = parseFloat(adjustment.personalLeaveAmount || 0);
+        const businessTripAllowance = parseFloat(adjustment.businessTripAllowance || 0);
+        const complianceBonus = parseFloat(adjustment.complianceBonus || 0);
+        const workTripSupport = parseFloat(adjustment.workTripSupport || 0);
+        const nightShiftHours = parseFloat(adjustment.nightShiftHours || 0);
+        const nightShiftAmount = parseFloat(adjustment.nightShiftAmount || 0);
+        const excessOvertimeNormalHours = parseFloat(adjustment.excessOvertimeNormalHours || 0);
+        const excessOvertimeSundayHours = parseFloat(adjustment.excessOvertimeSundayHours || 0);
+        const excessOvertimeHolidayHours = parseFloat(adjustment.excessOvertimeHolidayHours || 0);
+        const excessOvertimeNormalAmount = parseFloat(adjustment.excessOvertimeNormalAmount || 0);
+        const excessOvertimeSundayAmount = parseFloat(adjustment.excessOvertimeSundayAmount || 0);
+        const excessOvertimeHolidayAmount = parseFloat(adjustment.excessOvertimeHolidayAmount || 0);
 
         // Calculate rates
         const totalSalary = parseFloat(salaryConfig.totalSalary || 0);
@@ -179,11 +229,13 @@ export class PayrollCalculationService {
 
         // Total allowances flat (excluding pro-rated allowances which are built into total_salary)
         // Seniority allowance is paid flat on top as observed in the template sheet
-        const flatAllowanceAmount = seniorityAllowance + menstrualAllowance + childAllowance;
+        const flatAllowanceAmount = seniorityAllowance + menstrualAllowance + childAllowance +
+          businessTripAllowance + complianceBonus + workTripSupport + nightShiftAmount +
+          excessOvertimeNormalAmount + excessOvertimeSundayAmount + excessOvertimeHolidayAmount;
 
         // Gross Income
         const grossIncome = monthlySalaryAmount + paidLeaveAmount + 
-          overtimeNormalAmount + overtimeSundayAmount + overtimeHolidayAmount + flatAllowanceAmount;
+          overtimeNormalAmount + overtimeSundayAmount + overtimeHolidayAmount + personalLeaveAmount + flatAllowanceAmount;
 
         // Deductions
         const employeeInsuranceAmount = Math.round(insuranceSalary * empInsRate);
@@ -232,10 +284,11 @@ export class PayrollCalculationService {
         }
 
         // Advance payments (tạm ứng) - check if recorded in any other tables or default to 0
-        const advancePayment1 = 0;
-        const advancePayment2 = 0;
+        const advancePayment1 = parseFloat(adjustment.advancePayment1 || 0);
+        const advancePayment2 = parseFloat(adjustment.advancePayment2 || 0);
+        const pendingLeaveAdvance = parseFloat(adjustment.pendingLeaveAdvance || 0);
 
-        const totalDeduction = employeeInsuranceAmount + unionFeeAmount + pitAmount + advancePayment1 + advancePayment2;
+        const totalDeduction = employeeInsuranceAmount + unionFeeAmount + pitAmount + advancePayment1 + advancePayment2 + pendingLeaveAdvance;
         const netSalary = grossIncome - totalDeduction;
 
         // Round final net salary to nearest thousand VND
@@ -249,17 +302,36 @@ export class PayrollCalculationService {
           ruleSnapshot: rules,
           actualWorkdays,
           paidLeaveDays,
+          paidLeaveHours,
+          annualLeaveTotal,
+          annualLeaveUsedCumulative,
+          annualLeaveRemaining,
           holidayDays,
+          personalLeaveDays,
           unpaidLeaveDays,
           overtimeNormalHours,
           overtimeSundayHours,
           overtimeHolidayHours,
+          nightShiftHours,
+          excessOvertimeNormalHours,
+          excessOvertimeSundayHours,
+          excessOvertimeHolidayHours,
           monthlySalaryAmount,
+          personalLeaveAmount,
           paidLeaveAmount,
           overtimeNormalAmount,
           overtimeSundayAmount,
           overtimeHolidayAmount,
+          nightShiftAmount,
+          excessOvertimeNormalAmount,
+          excessOvertimeSundayAmount,
+          excessOvertimeHolidayAmount,
           allowanceAmount: flatAllowanceAmount,
+          businessTripAllowance,
+          complianceBonus,
+          workTripSupport,
+          menstrualAllowanceAmount: menstrualAllowance,
+          childAllowanceAmount: childAllowance,
           grossIncome,
           companyInsuranceAmount,
           employeeInsuranceAmount,
@@ -267,6 +339,7 @@ export class PayrollCalculationService {
           personalIncomeTaxAmount: pitAmount,
           advancePayment1,
           advancePayment2,
+          pendingLeaveAdvance,
           totalDeduction,
           netSalary,
           secondPaymentAmount,
@@ -316,18 +389,30 @@ export class PayrollCalculationService {
         const insertedItems = await client.query(
           `INSERT INTO payroll_items (
              payroll_cycle_id, employee_id, employee_code, employee_name, salary_config_snapshot, rule_snapshot,
-             actual_workdays, paid_leave_days, holiday_days, unpaid_leave_days, overtime_normal_hours, overtime_sunday_hours,
-             overtime_holiday_hours, monthly_salary_amount, paid_leave_amount, overtime_normal_amount, overtime_sunday_amount,
-             overtime_holiday_amount, allowance_amount, gross_income, company_insurance_amount, employee_insurance_amount,
-             union_fee_amount, personal_income_tax_amount, advance_payment_1, advance_payment_2, total_deduction,
+             actual_workdays, paid_leave_days, paid_leave_hours, annual_leave_total, annual_leave_used_cumulative,
+             annual_leave_remaining, holiday_days, personal_leave_days, unpaid_leave_days, overtime_normal_hours,
+             overtime_sunday_hours, overtime_holiday_hours, night_shift_hours, excess_overtime_normal_hours,
+             excess_overtime_sunday_hours, excess_overtime_holiday_hours, monthly_salary_amount, personal_leave_amount,
+             paid_leave_amount, overtime_normal_amount, overtime_sunday_amount, overtime_holiday_amount,
+             night_shift_amount, excess_overtime_normal_amount, excess_overtime_sunday_amount, excess_overtime_holiday_amount,
+             allowance_amount, business_trip_allowance, compliance_bonus, work_trip_support,
+             menstrual_allowance_amount, child_allowance_amount, gross_income,
+             company_insurance_amount, employee_insurance_amount,
+             union_fee_amount, personal_income_tax_amount, advance_payment_1, advance_payment_2, pending_leave_advance, total_deduction,
              net_salary, second_payment_amount, note
            )
            SELECT
              $1, "employeeId", "employeeCode", "employeeName", "salaryConfigSnapshot", "ruleSnapshot",
-             "actualWorkdays", "paidLeaveDays", "holidayDays", "unpaidLeaveDays", "overtimeNormalHours", "overtimeSundayHours",
-             "overtimeHolidayHours", "monthlySalaryAmount", "paidLeaveAmount", "overtimeNormalAmount", "overtimeSundayAmount",
-             "overtimeHolidayAmount", "allowanceAmount", "grossIncome", "companyInsuranceAmount", "employeeInsuranceAmount",
-             "unionFeeAmount", "personalIncomeTaxAmount", "advancePayment1", "advancePayment2", "totalDeduction",
+             "actualWorkdays", "paidLeaveDays", "paidLeaveHours", "annualLeaveTotal", "annualLeaveUsedCumulative",
+             "annualLeaveRemaining", "holidayDays", "personalLeaveDays", "unpaidLeaveDays", "overtimeNormalHours",
+             "overtimeSundayHours", "overtimeHolidayHours", "nightShiftHours", "excessOvertimeNormalHours",
+             "excessOvertimeSundayHours", "excessOvertimeHolidayHours", "monthlySalaryAmount", "personalLeaveAmount",
+             "paidLeaveAmount", "overtimeNormalAmount", "overtimeSundayAmount", "overtimeHolidayAmount",
+             "nightShiftAmount", "excessOvertimeNormalAmount", "excessOvertimeSundayAmount", "excessOvertimeHolidayAmount",
+             "allowanceAmount", "businessTripAllowance", "complianceBonus", "workTripSupport",
+             "menstrualAllowanceAmount", "childAllowanceAmount", "grossIncome",
+             "companyInsuranceAmount", "employeeInsuranceAmount",
+             "unionFeeAmount", "personalIncomeTaxAmount", "advancePayment1", "advancePayment2", "pendingLeaveAdvance", "totalDeduction",
              "netSalary", "secondPaymentAmount", note
            FROM jsonb_to_recordset($2::jsonb) AS payroll_data(
              "employeeId" uuid,
@@ -337,17 +422,36 @@ export class PayrollCalculationService {
              "ruleSnapshot" jsonb,
              "actualWorkdays" numeric,
              "paidLeaveDays" numeric,
+             "paidLeaveHours" numeric,
+             "annualLeaveTotal" numeric,
+             "annualLeaveUsedCumulative" numeric,
+             "annualLeaveRemaining" numeric,
              "holidayDays" numeric,
+             "personalLeaveDays" numeric,
              "unpaidLeaveDays" numeric,
              "overtimeNormalHours" numeric,
              "overtimeSundayHours" numeric,
              "overtimeHolidayHours" numeric,
+             "nightShiftHours" numeric,
+             "excessOvertimeNormalHours" numeric,
+             "excessOvertimeSundayHours" numeric,
+             "excessOvertimeHolidayHours" numeric,
              "monthlySalaryAmount" numeric,
+             "personalLeaveAmount" numeric,
              "paidLeaveAmount" numeric,
              "overtimeNormalAmount" numeric,
              "overtimeSundayAmount" numeric,
              "overtimeHolidayAmount" numeric,
+             "nightShiftAmount" numeric,
+             "excessOvertimeNormalAmount" numeric,
+             "excessOvertimeSundayAmount" numeric,
+             "excessOvertimeHolidayAmount" numeric,
              "allowanceAmount" numeric,
+             "businessTripAllowance" numeric,
+             "complianceBonus" numeric,
+             "workTripSupport" numeric,
+             "menstrualAllowanceAmount" numeric,
+             "childAllowanceAmount" numeric,
              "grossIncome" numeric,
              "companyInsuranceAmount" numeric,
              "employeeInsuranceAmount" numeric,
@@ -355,6 +459,7 @@ export class PayrollCalculationService {
              "personalIncomeTaxAmount" numeric,
              "advancePayment1" numeric,
              "advancePayment2" numeric,
+             "pendingLeaveAdvance" numeric,
              "totalDeduction" numeric,
              "netSalary" numeric,
              "secondPaymentAmount" numeric,

@@ -110,7 +110,7 @@ export default function PayrollDashboardClient({
     const separator = url.includes("?") ? "&" : "?";
     return `${url}${separator}factoryId=${encodeURIComponent(factoryId)}`;
   };
-  const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
+  const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "adjustments" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
     "employees"
   );
   const [cycles, setCycles] = useState(initialCycles);
@@ -122,6 +122,7 @@ export default function PayrollDashboardClient({
 
   // Clean Attendance Records & Payroll Sheet State
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [payrollAdjustments, setPayrollAdjustments] = useState<any[]>([]);
   const [payrollSheetItems, setPayrollSheetItems] = useState<any[]>([]);
   const [auditConfig, setAuditConfig] = useState<any>(null);
   const [auditAttendanceRecords, setAuditAttendanceRecords] = useState<any[]>([]);
@@ -142,6 +143,9 @@ export default function PayrollDashboardClient({
   const [pageAttendance, setPageAttendance] = useState(1);
   const [limitAttendance, setLimitAttendance] = useState(20);
 
+  const [pageAdjustments, setPageAdjustments] = useState(1);
+  const [limitAdjustments, setLimitAdjustments] = useState(20);
+
   const [pageSheet, setPageSheet] = useState(1);
   const [limitSheet, setLimitSheet] = useState(20);
 
@@ -157,6 +161,7 @@ export default function PayrollDashboardClient({
     setPageEmployees(1);
     setPageCycles(1);
     setPageAttendance(1);
+    setPageAdjustments(1);
     setPageSheet(1);
     setPageAuditAttendance(1);
     setPageAuditSheet(1);
@@ -253,6 +258,7 @@ export default function PayrollDashboardClient({
   useEffect(() => {
     if (selectedCycleId) {
       loadAttendanceRecords();
+      loadPayrollAdjustments();
       loadPayrollSheet();
       loadAuditAttendanceRecords();
       loadAuditPayrollSheet();
@@ -270,6 +276,19 @@ export default function PayrollDashboardClient({
       const data = await res.json();
       if (data.success) {
         setAttendanceRecords(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const loadPayrollAdjustments = async () => {
+    if (!selectedCycleId) return;
+    try {
+      const res = await fetch(withFactory(`/api/payroll/adjustments?cycleId=${selectedCycleId}`));
+      const data = await res.json();
+      if (data.success) {
+        setPayrollAdjustments(data.data);
       }
     } catch (err) {
       console.error(err);
@@ -352,6 +371,7 @@ export default function PayrollDashboardClient({
 
       if (selectedCycleId) {
         await loadAttendanceRecords();
+        await loadPayrollAdjustments();
         await loadPayrollSheet();
         await loadAuditAttendanceRecords();
         await loadAuditPayrollSheet();
@@ -1023,6 +1043,39 @@ export default function PayrollDashboardClient({
     }
   };
 
+  const updateAdjustmentValue = (employeeId: string, key: string, value: string) => {
+    setPayrollAdjustments((current) => current.map((item) => (
+      item.employeeId === employeeId ? { ...item, [key]: Number(value || 0) } : item
+    )));
+  };
+
+  const savePayrollAdjustment = async (adjustment: any) => {
+    if (!selectedCycleId) return;
+    try {
+      setIsLoading(true);
+      const res = await fetch(withFactory("/api/payroll/adjustments"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...adjustment,
+          cycleId: selectedCycleId,
+          factoryId,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error?.message || "Không thể lưu dữ liệu bổ sung.");
+        return;
+      }
+      await loadPayrollAdjustments();
+    } catch (err) {
+      console.error(err);
+      alert("Không thể lưu dữ liệu bổ sung.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Handle Logout
   const handleLogout = async () => {
     if (confirm("Bạn có muốn đăng xuất?")) {
@@ -1094,6 +1147,18 @@ export default function PayrollDashboardClient({
   const paginatedRecords = filteredRecords.slice(
     (pageAttendance - 1) * limitAttendance,
     pageAttendance * limitAttendance
+  );
+
+  const filteredAdjustments = payrollAdjustments.filter((item) => {
+    const matchesSearch = item.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesDept = deptFilter === "all" || item.departmentName === deptFilter;
+    return matchesSearch && matchesDept;
+  });
+
+  const paginatedAdjustments = filteredAdjustments.slice(
+    (pageAdjustments - 1) * limitAdjustments,
+    pageAdjustments * limitAdjustments
   );
 
   const filteredSheet = payrollSheetItems.filter(i => {
@@ -1210,6 +1275,15 @@ export default function PayrollDashboardClient({
                 >
                   <FileSpreadsheet className="w-5 h-5" />
                   <span>Chấm công gốc</span>
+                </button>
+                <button
+                  onClick={() => { setActiveTab("adjustments"); setSearchTerm(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                    activeTab === "adjustments" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                  }`}
+                >
+                  <SlidersHorizontal className="w-5 h-5" />
+                  <span>Bổ sung bảng lương</span>
                 </button>
                 <button
                   onClick={() => { setActiveTab("sheet"); setSearchTerm(""); }}
@@ -2366,6 +2440,179 @@ export default function PayrollDashboardClient({
                       <span className="px-2.5 py-1 bg-blue-600 text-white rounded-md font-bold mx-1">{pageAttendance} / {totalPages}</span>
                       <button onClick={() => setPageAttendance(p => Math.min(totalPages, p + 1))} disabled={pageAttendance === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
                       <button onClick={() => setPageAttendance(totalPages)} disabled={pageAttendance === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronsRight className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            {activeTab === "adjustments" && (() => {
+              const totalItems = filteredAdjustments.length;
+              const totalPages = Math.ceil(totalItems / limitAdjustments) || 1;
+              const inputClass = "w-24 rounded-lg border border-zinc-250 px-2 py-1 text-right text-xs font-semibold text-zinc-800 outline-none focus:border-blue-500";
+              const renderNumberInput = (item: any, key: string) => (
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={item[key] || 0}
+                  onChange={(event) => updateAdjustmentValue(item.employeeId, key, event.target.value)}
+                  className={inputClass}
+                />
+              );
+
+              return (
+                <>
+                  <div className="px-6 py-4 border-b border-zinc-150 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-zinc-500">Chu kỳ:</span>
+                        <select
+                          value={selectedCycleId}
+                          onChange={(e) => setSelectedCycleId(e.target.value)}
+                          className="border border-zinc-250 rounded-xl px-3 py-2 text-sm font-semibold bg-white text-zinc-700 outline-none cursor-pointer"
+                        >
+                          {cycles.map(c => (
+                            <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <select
+                        value={deptFilter}
+                        onChange={(e) => {
+                          setDeptFilter(e.target.value);
+                          setPageAdjustments(1);
+                        }}
+                        className="border border-zinc-250 rounded-xl px-3 py-2 text-sm font-semibold bg-white text-zinc-700 outline-none cursor-pointer"
+                      >
+                        <option value="all">Bộ phận (Tất cả)</option>
+                        {uniqueDepartments.map(d => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Tìm mã, họ tên..."
+                          value={searchTerm}
+                          onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setPageAdjustments(1);
+                          }}
+                          className="pl-10 pr-4 py-2 bg-white border border-zinc-250 rounded-xl text-sm w-60 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => selectedCycleId && handleCalculatePayroll(selectedCycleId)}
+                      disabled={!selectedCycleId || isSelectedCycleReadOnly}
+                      className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      <span>Tính lại sau khi nhập</span>
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-auto min-h-0">
+                    <table className="w-full min-w-[2300px] text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-4 py-3.5 sticky top-0 left-0 bg-zinc-50 border-b border-zinc-200 z-30 min-w-[90px]">Mã NV</th>
+                          <th className="px-4 py-3.5 sticky top-0 left-[90px] bg-zinc-50 border-b border-zinc-200 z-30 min-w-[170px]">Họ tên</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Tổng phép</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Giờ PN</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép cộng dồn</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép còn</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Việc riêng/BH</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương việc riêng/BH</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Công tác</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Thưởng tuân thủ</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">PC phí công tác</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Giờ làm đêm</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương làm đêm</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT vượt thường h</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT CN h</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT lễ h</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương OT vượt thường</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương OT CN</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương OT lễ</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ứng đợt 1</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ứng đợt 2</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ứng phép chờ việc</th>
+                          <th className="px-4 py-3.5 sticky top-0 right-0 bg-zinc-50 border-b border-zinc-200 border-l border-zinc-200 z-30 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-center min-w-[90px]">Lưu</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 text-zinc-750">
+                        {paginatedAdjustments.length === 0 ? (
+                          <tr>
+                            <td colSpan={23} className="px-4 py-8 text-center text-zinc-400">Chưa có nhân viên hoặc chưa chọn chu kỳ.</td>
+                          </tr>
+                        ) : (
+                          paginatedAdjustments.map((item) => (
+                            <tr key={item.employeeId} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
+                              <td className="px-4 py-3 sticky left-0 bg-white font-mono font-bold text-zinc-700 z-20">{item.employeeCode}</td>
+                              <td className="px-4 py-3 sticky left-[90px] bg-white font-bold text-zinc-800 z-20">{item.employeeName}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveTotal")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "paidLeaveHours")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveUsedCumulative")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveRemaining")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "personalLeaveDays")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "personalLeaveAmount")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "businessTripAllowance")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "complianceBonus")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "workTripSupport")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "nightShiftHours")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "nightShiftAmount")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeNormalHours")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeSundayHours")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeHolidayHours")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeNormalAmount")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeSundayAmount")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeHolidayAmount")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "advancePayment1")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "advancePayment2")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "pendingLeaveAdvance")}</td>
+                              <td className="px-4 py-2 sticky right-0 bg-white border-l border-zinc-200 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-center z-20">
+                                <button
+                                  onClick={() => savePayrollAdjustment(item)}
+                                  disabled={isLoading || isSelectedCycleReadOnly}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  Lưu
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-6 py-3.5 border-t border-zinc-200 flex items-center justify-between shrink-0 bg-zinc-50/50 text-xs text-zinc-500 font-semibold select-none">
+                    <div>Hiển thị {(pageAdjustments - 1) * limitAdjustments + 1}-{Math.min(pageAdjustments * limitAdjustments, totalItems)} / Tổng: {totalItems}</div>
+                    <div className="flex items-center gap-2">
+                      <span>Số hàng:</span>
+                      <select
+                        value={limitAdjustments}
+                        onChange={(e) => {
+                          setLimitAdjustments(Number(e.target.value));
+                          setPageAdjustments(1);
+                        }}
+                        className="bg-white border border-zinc-250 rounded-lg px-2 py-1 outline-none text-xs text-zinc-700 cursor-pointer font-bold"
+                      >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPageAdjustments(1)} disabled={pageAdjustments === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setPageAdjustments(p => Math.max(1, p - 1))} disabled={pageAdjustments === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                      <span className="px-2.5 py-1 bg-blue-600 text-white rounded-md font-bold mx-1">{pageAdjustments} / {totalPages}</span>
+                      <button onClick={() => setPageAdjustments(p => Math.min(totalPages, p + 1))} disabled={pageAdjustments === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setPageAdjustments(totalPages)} disabled={pageAdjustments === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronsRight className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 </>

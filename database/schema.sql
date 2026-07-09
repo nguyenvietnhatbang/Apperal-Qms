@@ -253,6 +253,36 @@ CREATE TABLE IF NOT EXISTS attendance_records (
   UNIQUE (payroll_cycle_id, employee_code, work_date)
 );
 
+CREATE TABLE IF NOT EXISTS payroll_adjustments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  payroll_cycle_id uuid NOT NULL REFERENCES payroll_cycles(id) ON DELETE CASCADE,
+  employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  annual_leave_total numeric(8,2) NOT NULL DEFAULT 0,
+  paid_leave_hours numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_used_cumulative numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_remaining numeric(8,2) NOT NULL DEFAULT 0,
+  personal_leave_days numeric(8,2) NOT NULL DEFAULT 0,
+  personal_leave_amount numeric(14,2) NOT NULL DEFAULT 0,
+  business_trip_allowance numeric(14,2) NOT NULL DEFAULT 0,
+  compliance_bonus numeric(14,2) NOT NULL DEFAULT 0,
+  work_trip_support numeric(14,2) NOT NULL DEFAULT 0,
+  night_shift_hours numeric(8,2) NOT NULL DEFAULT 0,
+  night_shift_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  advance_payment_1 numeric(14,2) NOT NULL DEFAULT 0,
+  advance_payment_2 numeric(14,2) NOT NULL DEFAULT 0,
+  pending_leave_advance numeric(14,2) NOT NULL DEFAULT 0,
+  note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (payroll_cycle_id, employee_id)
+);
+
 CREATE TABLE IF NOT EXISTS payroll_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   payroll_cycle_id uuid NOT NULL REFERENCES payroll_cycles(id) ON DELETE CASCADE,
@@ -263,17 +293,36 @@ CREATE TABLE IF NOT EXISTS payroll_items (
   rule_snapshot jsonb NOT NULL,
   actual_workdays numeric(8,2) NOT NULL DEFAULT 0,
   paid_leave_days numeric(8,2) NOT NULL DEFAULT 0,
+  paid_leave_hours numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_total numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_used_cumulative numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_remaining numeric(8,2) NOT NULL DEFAULT 0,
   holiday_days numeric(8,2) NOT NULL DEFAULT 0,
+  personal_leave_days numeric(8,2) NOT NULL DEFAULT 0,
   unpaid_leave_days numeric(8,2) NOT NULL DEFAULT 0,
   overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
   overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
   overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  night_shift_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
   monthly_salary_amount numeric(14,2) NOT NULL DEFAULT 0,
+  personal_leave_amount numeric(14,2) NOT NULL DEFAULT 0,
   paid_leave_amount numeric(14,2) NOT NULL DEFAULT 0,
   overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0,
   overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0,
   overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  night_shift_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0,
   allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  business_trip_allowance numeric(14,2) NOT NULL DEFAULT 0,
+  compliance_bonus numeric(14,2) NOT NULL DEFAULT 0,
+  work_trip_support numeric(14,2) NOT NULL DEFAULT 0,
+  menstrual_allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  child_allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
   gross_income numeric(14,2) NOT NULL DEFAULT 0,
   company_insurance_amount numeric(14,2) NOT NULL DEFAULT 0,
   employee_insurance_amount numeric(14,2) NOT NULL DEFAULT 0,
@@ -281,6 +330,7 @@ CREATE TABLE IF NOT EXISTS payroll_items (
   personal_income_tax_amount numeric(14,2) NOT NULL DEFAULT 0,
   advance_payment_1 numeric(14,2) NOT NULL DEFAULT 0,
   advance_payment_2 numeric(14,2) NOT NULL DEFAULT 0,
+  pending_leave_advance numeric(14,2) NOT NULL DEFAULT 0,
   total_deduction numeric(14,2) NOT NULL DEFAULT 0,
   net_salary numeric(14,2) NOT NULL DEFAULT 0,
   second_payment_amount numeric(14,2) NOT NULL DEFAULT 0,
@@ -383,17 +433,36 @@ CREATE TABLE IF NOT EXISTS audit_payroll_items (
   audit_config_snapshot jsonb NOT NULL,
   actual_workdays numeric(8,2) NOT NULL DEFAULT 0,
   paid_leave_days numeric(8,2) NOT NULL DEFAULT 0,
+  paid_leave_hours numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_total numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_used_cumulative numeric(8,2) NOT NULL DEFAULT 0,
+  annual_leave_remaining numeric(8,2) NOT NULL DEFAULT 0,
   holiday_days numeric(8,2) NOT NULL DEFAULT 0,
+  personal_leave_days numeric(8,2) NOT NULL DEFAULT 0,
   unpaid_leave_days numeric(8,2) NOT NULL DEFAULT 0,
   overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
   overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
   overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  night_shift_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0,
+  excess_overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0,
   monthly_salary_amount numeric(14,2) NOT NULL DEFAULT 0,
+  personal_leave_amount numeric(14,2) NOT NULL DEFAULT 0,
   paid_leave_amount numeric(14,2) NOT NULL DEFAULT 0,
   overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0,
   overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0,
   overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  night_shift_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0,
+  excess_overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0,
   allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  business_trip_allowance numeric(14,2) NOT NULL DEFAULT 0,
+  compliance_bonus numeric(14,2) NOT NULL DEFAULT 0,
+  work_trip_support numeric(14,2) NOT NULL DEFAULT 0,
+  menstrual_allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  child_allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
   gross_income numeric(14,2) NOT NULL DEFAULT 0,
   company_insurance_amount numeric(14,2) NOT NULL DEFAULT 0,
   employee_insurance_amount numeric(14,2) NOT NULL DEFAULT 0,
@@ -401,6 +470,7 @@ CREATE TABLE IF NOT EXISTS audit_payroll_items (
   personal_income_tax_amount numeric(14,2) NOT NULL DEFAULT 0,
   advance_payment_1 numeric(14,2) NOT NULL DEFAULT 0,
   advance_payment_2 numeric(14,2) NOT NULL DEFAULT 0,
+  pending_leave_advance numeric(14,2) NOT NULL DEFAULT 0,
   total_deduction numeric(14,2) NOT NULL DEFAULT 0,
   net_salary numeric(14,2) NOT NULL DEFAULT 0,
   second_payment_amount numeric(14,2) NOT NULL DEFAULT 0,
@@ -434,6 +504,48 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE payroll_cycles ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE payroll_rules ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE audit_configs ADD COLUMN IF NOT EXISTS factory_id uuid;
+
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS paid_leave_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS annual_leave_total numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS annual_leave_used_cumulative numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS annual_leave_remaining numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS personal_leave_days numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS night_shift_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS personal_leave_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS night_shift_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS business_trip_allowance numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS compliance_bonus numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS work_trip_support numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS menstrual_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS child_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS pending_leave_advance numeric(14,2) NOT NULL DEFAULT 0;
+
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS paid_leave_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS annual_leave_total numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS annual_leave_used_cumulative numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS annual_leave_remaining numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS personal_leave_days numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS night_shift_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_normal_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_sunday_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_holiday_hours numeric(8,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS personal_leave_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS night_shift_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_normal_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS excess_overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS business_trip_allowance numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS compliance_bonus numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS work_trip_support numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS menstrual_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS child_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS pending_leave_advance numeric(14,2) NOT NULL DEFAULT 0;
 
 UPDATE departments
 SET factory_id = (SELECT id FROM factories WHERE code = 'default')
@@ -567,6 +679,9 @@ CREATE INDEX IF NOT EXISTS idx_attendance_records_cycle_employee_date
 
 CREATE INDEX IF NOT EXISTS idx_attendance_records_work_date_employee
   ON attendance_records (work_date, employee_id, employee_code, updated_at DESC, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_payroll_adjustments_cycle_employee
+  ON payroll_adjustments (payroll_cycle_id, employee_id);
 
 CREATE INDEX IF NOT EXISTS idx_payroll_items_cycle_employee
   ON payroll_items (payroll_cycle_id, employee_code);

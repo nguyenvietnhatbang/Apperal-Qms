@@ -25,7 +25,7 @@ function getRuleValue(snapshot: unknown, key: string) {
 }
 
 function createEmptyRow() {
-  return Array.from({ length: 62 }, () => "") as unknown[];
+  return Array.from({ length: 66 }, () => "") as unknown[];
 }
 
 function getPayrollTitle(cycle: any) {
@@ -47,7 +47,7 @@ function buildTemplateRows(cycle: any) {
   rows[2][11] = toNumber(cycle.standardWorkdays) || 26;
   rows[3][1] = getPayrollTitle(cycle);
   rows[4][18] = 25000;
-  rows[5] = ["", ...Array.from({ length: 61 }, (_, index) => index + 1)];
+  rows[5] = ["", ...Array.from({ length: 64 }, (_, index) => index + 1), ""];
 
   const mainHeader = rows[6];
   const subHeader = rows[7];
@@ -129,16 +129,20 @@ function buildTemplateRows(cycle: any) {
   mainHeader[56] = "Sồ giờ OT chủ nhật";
   mainHeader[57] = "Số giờ OT lễ";
   mainHeader[58] = "Làm đêm";
-  mainHeader[59] = "Lương OT vượt bao gồm CN và Lễ";
-  mainHeader[60] = "Lương làm đêm";
-  mainHeader[61] = "Tổng chi lần 2";
+  mainHeader[59] = "Làm đêm";
+  mainHeader[60] = "Lương OT vượt thường";
+  mainHeader[61] = "Lương OT CN";
+  mainHeader[62] = "Lương OT Lễ";
+  mainHeader[63] = "Lương làm đêm";
+  mainHeader[64] = "Tổng chi lần 2";
+  mainHeader[65] = "Ứng phép chờ việc";
 
   return rows;
 }
 
 function getWorksheetMerges() {
   return [
-    ["B4", "BJ4"],
+    ["B4", "BN4"],
     ["D7", "E7"],
     ["K7", "N7"],
     ["O7", "U7"],
@@ -174,6 +178,10 @@ function getWorksheetMerges() {
       "BH",
       "BI",
       "BJ",
+      "BK",
+      "BL",
+      "BM",
+      "BN",
     ].map((column) => [`${column}7`, `${column}8`]),
   ];
 }
@@ -240,17 +248,18 @@ function buildPayrollRow(row: any, index: number) {
     getSnapshotValue(salary, "safetyAllowance"),
     getSnapshotValue(salary, "phoneAllowance"),
     getSnapshotValue(salary, "otherBonus"),
-    0,
-    0,
+    toNumber(row.complianceBonus),
+    toNumber(row.businessTripAllowance),
     getSnapshotValue(salary, "travelAllowance"),
     getSnapshotValue(salary, "housingAllowance"),
     getSnapshotValue(salary, "attendanceBonus"),
-    toNumber(row.paidLeaveDays) + toNumber(row.holidayDays),
+    toNumber(row.annualLeaveTotal),
     toNumber(row.paidLeaveDays),
-    0,
-    0,
-    0,
-    toNumber(row.unpaidLeaveDays),
+    toNumber(row.paidLeaveHours),
+    toNumber(row.annualLeaveUsedCumulative),
+    toNumber(row.annualLeaveRemaining),
+    toNumber(row.personalLeaveDays),
+    toNumber(row.personalLeaveAmount),
     toNumber(row.holidayDays),
     toNumber(row.actualWorkdays),
     toNumber(row.overtimeNormalHours),
@@ -261,9 +270,9 @@ function buildPayrollRow(row: any, index: number) {
     Math.round(insuranceSalary * companyUnemploymentRate),
     Math.round(insuranceSalary * companyUnionRate),
     toNumber(row.monthlySalaryAmount),
-    0,
-    0,
-    0,
+    toNumber(row.workTripSupport),
+    toNumber(row.menstrualAllowanceAmount),
+    toNumber(row.childAllowanceAmount),
     toNumber(row.overtimeNormalAmount),
     toNumber(row.overtimeSundayAmount),
     toNumber(row.overtimeHolidayAmount),
@@ -279,24 +288,27 @@ function buildPayrollRow(row: any, index: number) {
     toNumber(row.advancePayment2),
     toNumber(row.secondPaymentAmount),
     "",
-    0,
+    toNumber(row.excessOvertimeNormalHours),
     toNumber(row.overtimeSundayHours),
     toNumber(row.overtimeHolidayHours),
-    0,
-    toNumber(row.overtimeSundayAmount) + toNumber(row.overtimeHolidayAmount),
-    0,
+    toNumber(row.nightShiftHours),
+    toNumber(row.excessOvertimeNormalAmount),
+    toNumber(row.excessOvertimeSundayAmount),
+    toNumber(row.excessOvertimeHolidayAmount),
+    toNumber(row.nightShiftAmount),
     toNumber(row.secondPaymentAmount),
+    toNumber(row.pendingLeaveAdvance),
   ];
 
-  return values.slice(0, 62);
+  return values.slice(0, 66);
 }
 
 function buildDepartmentSummaryRow(departmentName: string, employeeRows: unknown[][], groupIndex: number) {
-  const summary: unknown[] = Array.from({ length: 62 }, () => "");
+  const summary: unknown[] = Array.from({ length: 66 }, () => "");
   summary[0] = toRoman(groupIndex + 1);
   summary[1] = departmentName.toUpperCase();
 
-  for (let columnIndex = 7; columnIndex < 62; columnIndex++) {
+  for (let columnIndex = 7; columnIndex < 66; columnIndex++) {
     const total = employeeRows.reduce((sum, row) => sum + toNumber(row[columnIndex]), 0);
     if (total !== 0) summary[columnIndex] = total;
   }
@@ -342,7 +354,7 @@ function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
     { width: 8 },
     { width: 18 },
     { width: 14 },
-    ...Array.from({ length: 55 }, () => ({ width: 14 })),
+    ...Array.from({ length: 59 }, () => ({ width: 14 })),
   ];
 
   worksheet.getRow(1).height = 24;
@@ -385,7 +397,7 @@ function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
   worksheet.getCell("B4").alignment = { horizontal: "center", vertical: "middle" };
   worksheet.getCell("B4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D4ED8" } };
 
-  for (let column = 1; column <= 62; column++) {
+  for (let column = 1; column <= 66; column++) {
     const numberCell = worksheet.getRow(6).getCell(column);
     numberCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
     numberCell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF1E3A8A" } };
@@ -424,7 +436,7 @@ function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
 
   worksheet.autoFilter = {
     from: { row: 8, column: 1 },
-    to: { row: 8, column: 62 },
+    to: { row: 8, column: 66 },
   };
 }
 
@@ -445,15 +457,32 @@ export class PayrollExportService {
       `SELECT p.id, p.employee_id as "employeeId", p.employee_code as "employeeCode", p.employee_name as "employeeName",
               p.salary_config_snapshot as "salaryConfigSnapshot", p.rule_snapshot as "ruleSnapshot",
               p.actual_workdays as "actualWorkdays", p.paid_leave_days as "paidLeaveDays",
-              p.holiday_days as "holidayDays", p.unpaid_leave_days as "unpaidLeaveDays",
+              p.paid_leave_hours as "paidLeaveHours", p.annual_leave_total as "annualLeaveTotal",
+              p.annual_leave_used_cumulative as "annualLeaveUsedCumulative",
+              p.annual_leave_remaining as "annualLeaveRemaining",
+              p.holiday_days as "holidayDays", p.personal_leave_days as "personalLeaveDays",
+              p.unpaid_leave_days as "unpaidLeaveDays",
               p.overtime_normal_hours as "overtimeNormalHours", p.overtime_sunday_hours as "overtimeSundayHours",
-              p.overtime_holiday_hours as "overtimeHolidayHours", p.monthly_salary_amount as "monthlySalaryAmount",
+              p.overtime_holiday_hours as "overtimeHolidayHours", p.night_shift_hours as "nightShiftHours",
+              p.excess_overtime_normal_hours as "excessOvertimeNormalHours",
+              p.excess_overtime_sunday_hours as "excessOvertimeSundayHours",
+              p.excess_overtime_holiday_hours as "excessOvertimeHolidayHours",
+              p.monthly_salary_amount as "monthlySalaryAmount", p.personal_leave_amount as "personalLeaveAmount",
               p.paid_leave_amount as "paidLeaveAmount", p.overtime_normal_amount as "overtimeNormalAmount",
               p.overtime_sunday_amount as "overtimeSundayAmount", p.overtime_holiday_amount as "overtimeHolidayAmount",
-              p.allowance_amount as "allowanceAmount", p.gross_income as "grossIncome",
+              p.night_shift_amount as "nightShiftAmount",
+              p.excess_overtime_normal_amount as "excessOvertimeNormalAmount",
+              p.excess_overtime_sunday_amount as "excessOvertimeSundayAmount",
+              p.excess_overtime_holiday_amount as "excessOvertimeHolidayAmount",
+              p.allowance_amount as "allowanceAmount", p.business_trip_allowance as "businessTripAllowance",
+              p.compliance_bonus as "complianceBonus", p.work_trip_support as "workTripSupport",
+              p.menstrual_allowance_amount as "menstrualAllowanceAmount",
+              p.child_allowance_amount as "childAllowanceAmount",
+              p.gross_income as "grossIncome",
               p.employee_insurance_amount as "employeeInsuranceAmount", p.union_fee_amount as "unionFeeAmount",
               p.personal_income_tax_amount as "personalIncomeTaxAmount", p.advance_payment_1 as "advancePayment1",
               p.advance_payment_2 as "advancePayment2", p.total_deduction as "totalDeduction",
+              p.pending_leave_advance as "pendingLeaveAdvance",
               p.net_salary as "netSalary", p.second_payment_amount as "secondPaymentAmount",
               e.gender, e.department_name as "departmentName", e.position_title as "positionTitle",
               e.joined_date as "joinedDate", e.dependent_count as "dependentCount"
