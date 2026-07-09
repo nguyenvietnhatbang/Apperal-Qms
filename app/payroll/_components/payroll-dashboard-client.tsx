@@ -1278,6 +1278,9 @@ export default function PayrollDashboardClient({
             <Link href="/payroll" className="hover:text-zinc-800">Quản lý nhân sự</Link>
             <ChevronRight className="w-4 h-4 text-zinc-300" />
             <span className="text-zinc-800 font-semibold">Chấm công & Tính lương</span>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+              {currentUser.factoryName}
+            </span>
           </div>
 
           {/* User profile details */}
@@ -1303,6 +1306,9 @@ export default function PayrollDashboardClient({
                 <p className="text-sm font-semibold text-zinc-800 leading-none">{currentUser.displayName}</p>
                 <p className="text-xs text-zinc-400 mt-1 uppercase font-bold tracking-wider">
                   {currentUser.isAdmin ? "Admin" : currentUser.departmentName || "Thành viên"}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-emerald-700">
+                  {currentUser.factoryName}
                 </p>
               </div>
               <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/10">

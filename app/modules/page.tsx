@@ -93,6 +93,9 @@ export default async function ModulesPage() {
                 <p className="text-xs font-medium text-slate-500">
                   {user.isAdmin ? "Administrator" : user.departmentName || "Thành viên"}
                 </p>
+                <p className="text-xs font-bold text-emerald-700">
+                  {user.factoryName}
+                </p>
               </div>
             </div>
             <LogoutButton />
@@ -113,6 +116,10 @@ export default async function ModulesPage() {
             <p className="mt-3 max-w-2xl text-base font-medium leading-7 text-slate-600">
               Chọn phân hệ cần xử lý. Các module hiển thị theo quyền truy cập của tài khoản hiện tại.
             </p>
+            <div className="mt-4 inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+              <span>Nhà xưởng hiện tại:</span>
+              <span>{user.factoryName}</span>
+            </div>
           </div>
 
           <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
