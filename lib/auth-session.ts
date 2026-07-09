@@ -8,6 +8,10 @@ export interface UserSessionData {
   displayName: string;
   email: string | null;
   isAdmin: boolean;
+  isSystemAdmin: boolean;
+  factoryId: string;
+  factoryName: string;
+  factoryCode: string;
   departmentId: string | null;
   departmentName: string | null;
   departmentCode: string | null;
@@ -101,15 +105,18 @@ export async function getCurrentUser(): Promise<UserSessionData | null> {
     // Get user details
     const user = await queryOne(
       `SELECT u.id, u.username, u.display_name, u.email, u.is_admin as user_admin,
+              f.id as factory_id, f.name as factory_name, f.code as factory_code,
               d.id as dept_id, d.name as dept_name, d.code as dept_code, d.is_admin as dept_admin
        FROM app_users u
-       LEFT JOIN departments d ON u.department_id = d.id
+       JOIN factories f ON f.id = u.factory_id AND f.deleted_at IS NULL AND f.is_active = true
+       LEFT JOIN departments d ON u.department_id = d.id AND d.factory_id = u.factory_id AND d.deleted_at IS NULL AND d.is_active = true
        WHERE u.id = $1 AND u.status = 'active' AND u.deleted_at IS NULL`,
       [session.user_id]
     );
     
     if (!user) return null;
     
+    const isSystemAdmin = !!user.user_admin;
     const isAdmin = !!(user.user_admin || user.dept_admin);
     
     // Get permissions
@@ -154,6 +161,10 @@ export async function getCurrentUser(): Promise<UserSessionData | null> {
       displayName: user.display_name,
       email: user.email,
       isAdmin,
+      isSystemAdmin,
+      factoryId: user.factory_id,
+      factoryName: user.factory_name,
+      factoryCode: user.factory_code,
       departmentId: user.dept_id,
       departmentName: user.dept_name,
       departmentCode: user.dept_code,

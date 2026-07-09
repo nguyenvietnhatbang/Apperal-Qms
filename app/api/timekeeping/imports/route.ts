@@ -23,7 +23,10 @@ export async function GET(request: NextRequest) {
       return ApiResponse.badRequest("Mã chu kỳ thanh toán (cycleId) là bắt buộc.", "MISSING_FIELDS");
     }
 
-    const imports = await AttendanceImportService.getImportsByCycleId(cycleId);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    const imports = await AttendanceImportService.getImportsByCycleId(cycleId, currentUser.factoryId);
     return ApiResponse.success(imports);
   } catch (error: unknown) {
     console.error("Error in GET imports:", error);
@@ -59,11 +62,12 @@ export async function POST(request: NextRequest) {
       file.name,
       buffer,
       currentUser.id,
+      currentUser.factoryId,
       currentUser.isAdmin
     );
 
     // 2. Clean and standardize the rows
-    const cleanResults = await AttendanceCleaningService.cleanAndProcessImport(importId);
+    const cleanResults = await AttendanceCleaningService.cleanAndProcessImport(importId, currentUser.factoryId);
 
     return ApiResponse.success({
       message: "Import và làm sạch chấm công thành công.",
@@ -94,7 +98,12 @@ export async function DELETE(request: NextRequest) {
       return ApiResponse.badRequest("Mã chu kỳ thanh toán (cycleId) là bắt buộc.", "MISSING_FIELDS");
     }
 
-    const result = await AttendanceImportService.deleteCycleImportData(cycleId, currentUser.id, currentUser.isAdmin);
+    const result = await AttendanceImportService.deleteCycleImportData(
+      cycleId,
+      currentUser.id,
+      currentUser.factoryId,
+      currentUser.isAdmin
+    );
     return ApiResponse.success({
       message: "Đã xóa dữ liệu chấm công đã import của chu kỳ.",
       ...result,

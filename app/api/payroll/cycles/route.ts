@@ -11,7 +11,10 @@ export async function GET(request: NextRequest) {
       return ApiResponse.forbidden("Bạn không có quyền xem chu kỳ lương.");
     }
 
-    const cycles = await PayrollCycleService.getCycles();
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    const cycles = await PayrollCycleService.getCycles(currentUser.factoryId);
     return ApiResponse.success(cycles);
   } catch (error: any) {
     console.error("Error in GET cycles:", error);
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
       standardWorkdays: standardWorkdays !== undefined ? Number(standardWorkdays) : undefined,
       standardHoursPerDay: standardHoursPerDay !== undefined ? Number(standardHoursPerDay) : undefined,
       note,
-    }, currentUser.id);
+    }, currentUser.id, currentUser.factoryId);
 
     return ApiResponse.success(newCycle, 201);
   } catch (error: any) {

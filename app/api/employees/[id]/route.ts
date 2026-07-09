@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { EmployeeService } from "@/features/employees/services/employee-service";
 import { ApiResponse } from "@/lib/api-response";
+import { getCurrentUser } from "@/lib/auth-session";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -15,7 +16,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const emp = await EmployeeService.getEmployeeById(id);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    const emp = await EmployeeService.getEmployeeById(id, currentUser.factoryId);
     
     if (!emp) {
       return ApiResponse.notFound("Không tìm thấy nhân viên.");
@@ -43,7 +47,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return ApiResponse.badRequest("Mã nhân viên và họ tên không được để trống.", "MISSING_FIELDS");
     }
 
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
     const updatedEmp = await EmployeeService.updateEmployee(id, {
+      factoryId: currentUser.factoryId,
       employeeCode,
       fullName,
       gender,
@@ -70,7 +78,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    await EmployeeService.deleteEmployee(id);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    await EmployeeService.deleteEmployee(id, currentUser.factoryId);
     return ApiResponse.success({ message: "Xóa nhân viên thành công." });
   } catch (error: any) {
     console.error("Error in DELETE employee:", error);

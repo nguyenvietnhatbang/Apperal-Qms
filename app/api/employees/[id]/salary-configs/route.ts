@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { SalaryConfigService } from "@/features/employees/services/salary-config-service";
 import { ApiResponse } from "@/lib/api-response";
+import { getCurrentUser } from "@/lib/auth-session";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -102,7 +103,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const configs = await SalaryConfigService.getConfigsByEmployeeId(id);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    const configs = await SalaryConfigService.getConfigsByEmployeeId(id, currentUser.factoryId);
     return ApiResponse.success(configs);
   } catch (error: unknown) {
     console.error("Error in GET employee salary configs:", error);
@@ -130,6 +134,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return ApiResponse.badRequest("Ngày hiệu lực bắt đầu không được để trống.", "INVALID_SALARY_CONFIG");
     }
 
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
     const newConfig = await SalaryConfigService.createSalaryConfig({
       employeeId: id,
       effectiveFrom,
@@ -148,7 +155,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       otherBonus: payload.otherBonus,
       mealAllowance: payload.mealAllowance,
       note: payload.note,
-    });
+    }, currentUser.factoryId);
 
     return ApiResponse.success(newConfig, 201);
   } catch (error: unknown) {
@@ -185,6 +192,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       return ApiResponse.badRequest("Ngày hiệu lực bắt đầu không được để trống.", "INVALID_SALARY_CONFIG");
     }
 
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
     const updatedConfig = await SalaryConfigService.updateSalaryConfig(configId, {
       employeeId: id,
       effectiveFrom,
@@ -203,7 +213,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       otherBonus: payload.otherBonus,
       mealAllowance: payload.mealAllowance,
       note: payload.note,
-    });
+    }, currentUser.factoryId);
 
     if (!updatedConfig) {
       return ApiResponse.notFound("Không tìm thấy cấu hình lương cần cập nhật.");

@@ -2,6 +2,7 @@ import { query, queryOne, transaction } from "@/lib/db";
 
 export interface DepartmentData {
   id?: string;
+  factoryId: string;
   code: string;
   name: string;
   description?: string;
@@ -24,24 +25,27 @@ export class DepartmentService {
   /**
    * Get all active departments
    */
-  static async getDepartments() {
+  static async getDepartments(factoryId: string) {
     return await query(
-      `SELECT id, code, name, description, is_admin, is_active, created_at, updated_at 
-       FROM departments 
-       WHERE deleted_at IS NULL 
-       ORDER BY is_admin DESC, name ASC`
+      `SELECT d.id, d.factory_id, f.name as factory_name, d.code, d.name, d.description,
+              d.is_admin, d.is_active, d.created_at, d.updated_at
+       FROM departments d
+       JOIN factories f ON f.id = d.factory_id
+       WHERE d.deleted_at IS NULL AND d.factory_id = $1
+       ORDER BY d.is_admin DESC, d.name ASC`,
+      [factoryId]
     );
   }
 
   /**
    * Get department details with permissions by ID
    */
-  static async getDepartmentById(id: string) {
+  static async getDepartmentById(id: string, factoryId: string) {
     const dept = await queryOne(
-      `SELECT id, code, name, description, is_admin, is_active 
+      `SELECT id, factory_id, code, name, description, is_admin, is_active 
        FROM departments 
-       WHERE id = $1 AND deleted_at IS NULL`,
-      [id]
+       WHERE id = $1 AND factory_id = $2 AND deleted_at IS NULL`,
+      [id, factoryId]
     );
 
     if (!dept) return null;
@@ -73,10 +77,11 @@ export class DepartmentService {
     return await transaction(async (client) => {
       // Insert department
       const deptRes = await client.query(
-        `INSERT INTO departments (code, name, description, is_admin, is_active)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING id, code, name, description, is_admin, is_active`,
+        `INSERT INTO departments (factory_id, code, name, description, is_admin, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, factory_id, code, name, description, is_admin, is_active`,
         [
+          data.factoryId,
           data.code,
           data.name,
           data.description || null,
@@ -120,8 +125,8 @@ export class DepartmentService {
       const deptRes = await client.query(
         `UPDATE departments 
          SET code = $1, name = $2, description = $3, is_admin = $4, is_active = $5, updated_at = now()
-         WHERE id = $6 AND deleted_at IS NULL
-         RETURNING id, code, name, description, is_admin, is_active`,
+         WHERE id = $6 AND factory_id = $7 AND deleted_at IS NULL
+         RETURNING id, factory_id, code, name, description, is_admin, is_active`,
         [
           data.code,
           data.name,
@@ -129,6 +134,7 @@ export class DepartmentService {
           data.isAdmin || false,
           data.isActive !== undefined ? data.isActive : true,
           id,
+          data.factoryId,
         ]
       );
 
@@ -170,9 +176,9 @@ export class DepartmentService {
   /**
    * Soft delete department
    */
-  static async deleteDepartment(id: string) {
+  static async deleteDepartment(id: string, factoryId: string) {
     // Check if it's the admin department
-    const dept = await queryOne("SELECT code FROM departments WHERE id = $1", [id]);
+    const dept = await queryOne("SELECT code FROM departments WHERE id = $1 AND factory_id = $2", [id, factoryId]);
     if (dept && dept.code === "admin") {
       throw new Error("Cannot delete admin department");
     }
@@ -180,8 +186,8 @@ export class DepartmentService {
     await query(
       `UPDATE departments 
        SET deleted_at = now(), is_active = false 
-       WHERE id = $1`,
-      [id]
+       WHERE id = $1 AND factory_id = $2`,
+      [id, factoryId]
     );
     return true;
   }

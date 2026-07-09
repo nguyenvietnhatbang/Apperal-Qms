@@ -10,12 +10,13 @@ export class AttendanceImportService {
     fileName: string,
     fileBuffer: Buffer,
     userId: string,
+    factoryId: string,
     allowFinalizedCycleUpdate = false
   ) {
     return await transaction(async (client) => {
       const cycleRes = await client.query(
-        `SELECT status FROM payroll_cycles WHERE id = $1`,
-        [cycleId]
+        `SELECT status FROM payroll_cycles WHERE id = $1 AND factory_id = $2`,
+        [cycleId, factoryId]
       );
 
       if (cycleRes.rows.length === 0) {
@@ -154,27 +155,28 @@ export class AttendanceImportService {
   /**
    * Get all imports for a cycle
    */
-  static async getImportsByCycleId(cycleId: string) {
+  static async getImportsByCycleId(cycleId: string, factoryId: string) {
     return await query(
       `SELECT i.id, i.file_name as "fileName", i.source_kind as "sourceKind", i.status, 
               i.total_rows as "totalRows", i.valid_rows as "validRows", i.invalid_rows as "invalidRows",
               i.imported_at as "importedAt", u.display_name as "importedBy"
        FROM attendance_imports i
        LEFT JOIN app_users u ON i.imported_by = u.id
-       WHERE i.payroll_cycle_id = $1
+       JOIN payroll_cycles c ON c.id = i.payroll_cycle_id
+       WHERE i.payroll_cycle_id = $1 AND c.factory_id = $2
        ORDER BY i.imported_at DESC`,
-      [cycleId]
+      [cycleId, factoryId]
     );
   }
 
   /**
    * Delete imported attendance data and dependent payroll outputs for a cycle.
    */
-  static async deleteCycleImportData(cycleId: string, actorId: string, allowFinalizedCycleUpdate = false) {
+  static async deleteCycleImportData(cycleId: string, actorId: string, factoryId: string, allowFinalizedCycleUpdate = false) {
     return await transaction(async (client) => {
       const cycleRes = await client.query(
-        `SELECT status FROM payroll_cycles WHERE id = $1`,
-        [cycleId]
+        `SELECT status FROM payroll_cycles WHERE id = $1 AND factory_id = $2`,
+        [cycleId, factoryId]
       );
 
       if (cycleRes.rows.length === 0) {

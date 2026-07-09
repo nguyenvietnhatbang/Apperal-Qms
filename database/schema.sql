@@ -42,9 +42,22 @@ CREATE TABLE IF NOT EXISTS modules (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS departments (
+CREATE TABLE IF NOT EXISTS factories (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   code varchar(50) NOT NULL UNIQUE,
+  name varchar(150) NOT NULL,
+  description text,
+  is_active boolean NOT NULL DEFAULT true,
+  created_by uuid,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
+CREATE TABLE IF NOT EXISTS departments (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
+  code varchar(50) NOT NULL,
   name varchar(150) NOT NULL,
   description text,
   is_admin boolean NOT NULL DEFAULT false,
@@ -69,6 +82,7 @@ CREATE TABLE IF NOT EXISTS department_module_permissions (
 
 CREATE TABLE IF NOT EXISTS app_users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
   department_id uuid REFERENCES departments(id) ON DELETE SET NULL,
   username varchar(80) NOT NULL UNIQUE,
   display_name varchar(150) NOT NULL,
@@ -95,7 +109,8 @@ CREATE TABLE IF NOT EXISTS user_sessions (
 
 CREATE TABLE IF NOT EXISTS employees (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_code varchar(50) NOT NULL UNIQUE,
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
+  employee_code varchar(50) NOT NULL,
   full_name varchar(180) NOT NULL,
   gender varchar(20),
   department_name varchar(150),
@@ -147,7 +162,8 @@ CREATE TABLE IF NOT EXISTS payroll_rules (
 
 CREATE TABLE IF NOT EXISTS payroll_cycles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  code varchar(50) NOT NULL UNIQUE,
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
+  code varchar(50) NOT NULL,
   name varchar(150) NOT NULL,
   period_start date NOT NULL,
   period_end date NOT NULL,
@@ -394,26 +410,104 @@ CREATE TABLE IF NOT EXISTS audit_payroll_item_lines (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+INSERT INTO factories (code, name, description, is_active)
+VALUES ('default', 'Xưởng mặc định', 'Xưởng mặc định dùng để giữ dữ liệu hiện có khi nâng cấp nhiều xưởng.', true)
+ON CONFLICT (code) DO UPDATE
+SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  is_active = EXCLUDED.is_active,
+  updated_at = now();
+
+ALTER TABLE departments ADD COLUMN IF NOT EXISTS factory_id uuid;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS factory_id uuid;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS factory_id uuid;
+ALTER TABLE payroll_cycles ADD COLUMN IF NOT EXISTS factory_id uuid;
+
+UPDATE departments
+SET factory_id = (SELECT id FROM factories WHERE code = 'default')
+WHERE factory_id IS NULL;
+
+UPDATE app_users
+SET factory_id = COALESCE(
+  (SELECT factory_id FROM departments WHERE departments.id = app_users.department_id),
+  (SELECT id FROM factories WHERE code = 'default')
+)
+WHERE factory_id IS NULL;
+
+UPDATE employees
+SET factory_id = (SELECT id FROM factories WHERE code = 'default')
+WHERE factory_id IS NULL;
+
+UPDATE payroll_cycles
+SET factory_id = (SELECT id FROM factories WHERE code = 'default')
+WHERE factory_id IS NULL;
+
+ALTER TABLE departments ALTER COLUMN factory_id SET NOT NULL;
+ALTER TABLE app_users ALTER COLUMN factory_id SET NOT NULL;
+ALTER TABLE employees ALTER COLUMN factory_id SET NOT NULL;
+ALTER TABLE payroll_cycles ALTER COLUMN factory_id SET NOT NULL;
+
+DO $$
+BEGIN
+  ALTER TABLE departments DROP CONSTRAINT IF EXISTS departments_code_key;
+  ALTER TABLE employees DROP CONSTRAINT IF EXISTS employees_employee_code_key;
+  ALTER TABLE payroll_cycles DROP CONSTRAINT IF EXISTS payroll_cycles_code_key;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'departments_factory_fk') THEN
+    ALTER TABLE departments
+      ADD CONSTRAINT departments_factory_fk FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'app_users_factory_fk') THEN
+    ALTER TABLE app_users
+      ADD CONSTRAINT app_users_factory_fk FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_factory_fk') THEN
+    ALTER TABLE employees
+      ADD CONSTRAINT employees_factory_fk FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_cycles_factory_fk') THEN
+    ALTER TABLE payroll_cycles
+      ADD CONSTRAINT payroll_cycles_factory_fk FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT;
+  END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_department_permissions_module
   ON department_module_permissions (module_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_departments_factory_code_unique
+  ON departments (factory_id, code);
+
 CREATE INDEX IF NOT EXISTS idx_app_users_department_status
   ON app_users (department_id, status)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_app_users_factory_status
+  ON app_users (factory_id, status)
   WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_expires
   ON user_sessions (user_id, expires_at)
   WHERE revoked_at IS NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_factory_code_unique
+  ON employees (factory_id, employee_code);
+
 CREATE INDEX IF NOT EXISTS idx_employees_search
-  ON employees (employee_code, full_name, status)
+  ON employees (factory_id, employee_code, full_name, status)
   WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_salary_configs_employee_effective
   ON employee_salary_configs (employee_id, effective_from, effective_to);
 
 CREATE INDEX IF NOT EXISTS idx_payroll_cycles_period_status
-  ON payroll_cycles (period_start, period_end, status);
+  ON payroll_cycles (factory_id, period_start, period_end, status);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_cycles_factory_code_unique
+  ON payroll_cycles (factory_id, code);
 
 CREATE INDEX IF NOT EXISTS idx_attendance_records_cycle_employee_date
   ON attendance_records (payroll_cycle_id, employee_code, work_date);
@@ -442,9 +536,11 @@ SET
   sort_order = EXCLUDED.sort_order,
   updated_at = now();
 
-INSERT INTO departments (code, name, description, is_admin)
-VALUES ('admin', 'Admin', 'Phòng ban/quyền quản trị toàn hệ thống.', true)
-ON CONFLICT (code) DO UPDATE
+INSERT INTO departments (factory_id, code, name, description, is_admin)
+SELECT id, 'admin', 'Admin', 'Phòng ban/quyền quản trị toàn hệ thống.', true
+FROM factories
+WHERE code = 'default'
+ON CONFLICT (factory_id, code) DO UPDATE
 SET
   name = EXCLUDED.name,
   description = EXCLUDED.description,
@@ -463,7 +559,8 @@ INSERT INTO department_module_permissions (
 SELECT d.id, m.id, true, true, true, true, true
 FROM departments d
 CROSS JOIN modules m
-WHERE d.code = 'admin'
+JOIN factories f ON f.id = d.factory_id
+WHERE d.code = 'admin' AND f.code = 'default'
 ON CONFLICT (department_id, module_id) DO UPDATE
 SET
   can_view = true,
@@ -529,6 +626,7 @@ SET
 -- Temporary password: Admin@123
 -- Change the password immediately after first login.
 INSERT INTO app_users (
+  factory_id,
   department_id,
   username,
   display_name,
@@ -537,6 +635,7 @@ INSERT INTO app_users (
   is_admin
 )
 SELECT
+  d.factory_id,
   d.id,
   'admin',
   'System Admin',
@@ -544,7 +643,8 @@ SELECT
   'active',
   true
 FROM departments d
-WHERE d.code = 'admin'
+JOIN factories f ON f.id = d.factory_id
+WHERE d.code = 'admin' AND f.code = 'default'
 ON CONFLICT (username) DO NOTHING;
 
 -- Optional audit-focused bootstrap user.
@@ -552,6 +652,7 @@ ON CONFLICT (username) DO NOTHING;
 -- Temporary password: Admin2@123
 -- Change the password immediately after first login.
 INSERT INTO app_users (
+  factory_id,
   department_id,
   username,
   display_name,
@@ -560,6 +661,7 @@ INSERT INTO app_users (
   is_admin
 )
 SELECT
+  d.factory_id,
   d.id,
   'admin2',
   'Audit Admin',
@@ -567,5 +669,6 @@ SELECT
   'active',
   true
 FROM departments d
-WHERE d.code = 'admin'
+JOIN factories f ON f.id = d.factory_id
+WHERE d.code = 'admin' AND f.code = 'default'
 ON CONFLICT (username) DO NOTHING;

@@ -5,14 +5,14 @@ export class PayrollCalculationService {
   /**
    * Calculate payroll for all employees in a cycle and save snapshot results
    */
-  static async calculateCyclePayroll(cycleId: string, actorId: string, allowFinalizedCycleUpdate = false) {
+  static async calculateCyclePayroll(cycleId: string, actorId: string, factoryId: string, allowFinalizedCycleUpdate = false) {
     return await transaction(async (client) => {
       // 1. Fetch cycle info
       const cycleRes = await client.query(
-        `SELECT id, code, name, period_start, period_end, standard_workdays, standard_hours_per_day, status 
+        `SELECT id, factory_id, code, name, period_start, period_end, standard_workdays, standard_hours_per_day, status 
          FROM payroll_cycles 
-         WHERE id = $1`,
-        [cycleId]
+         WHERE id = $1 AND factory_id = $2`,
+        [cycleId, factoryId]
       );
       if (cycleRes.rows.length === 0) throw new Error("Không tìm thấy chu kỳ lương.");
       const cycle = cycleRes.rows[0];
@@ -37,8 +37,9 @@ export class PayrollCalculationService {
       const employeesRes = await client.query(
         `SELECT id, employee_code, full_name, gender, status, dependent_count, has_child_under_6 
          FROM employees 
-         WHERE deleted_at IS NULL AND status = 'active'
-         ORDER BY employee_code ASC`
+         WHERE deleted_at IS NULL AND status = 'active' AND factory_id = $1
+         ORDER BY employee_code ASC`,
+        [cycle.factory_id]
       );
       const employees = employeesRes.rows;
       const employeeIds = employees.map((employee: any) => employee.id);

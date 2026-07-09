@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { SalaryConfigService } from "@/features/employees/services/salary-config-service";
 import { ApiResponse } from "@/lib/api-response";
+import { getCurrentUser } from "@/lib/auth-session";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -71,6 +72,9 @@ export async function POST(request: NextRequest) {
       return ApiResponse.badRequest("Các khoản lương và phụ cấp phải là số không âm.", "INVALID_SALARY_VALUES");
     }
 
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
     const configs = await SalaryConfigService.createBulkSalaryConfigs({
       employeeIds,
       effectiveFrom,
@@ -87,7 +91,7 @@ export async function POST(request: NextRequest) {
       otherBonus,
       mealAllowance,
       note: note || null,
-    });
+    }, currentUser.factoryId);
 
     return ApiResponse.success({ updatedCount: configs.length, configs }, 201);
   } catch (error: unknown) {

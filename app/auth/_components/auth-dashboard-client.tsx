@@ -6,7 +6,7 @@ import {
   Users, Shield, LayoutGrid, LogOut, Plus, Search, 
   Edit2, Trash2, Key, Bell, User, Check, X, ShieldAlert,
   ChevronRight, Home, Settings, HelpCircle, Loader2, ArrowLeft, 
-  ChevronsLeft, ChevronsRight, ChevronLeft, SlidersHorizontal
+  ChevronsLeft, ChevronsRight, ChevronLeft, SlidersHorizontal, Building2
 } from "lucide-react";
 import Link from "next/link";
 
@@ -14,6 +14,7 @@ interface AuthDashboardClientProps {
   currentUser: any;
   initialDepartments: any[];
   initialUsers: any[];
+  initialFactories: any[];
   modules: any[];
 }
 
@@ -21,12 +22,15 @@ export default function AuthDashboardClient({
   currentUser,
   initialDepartments,
   initialUsers,
+  initialFactories,
   modules,
 }: AuthDashboardClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"users" | "departments">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "departments" | "factories">("users");
   const [departments, setDepartments] = useState(initialDepartments);
   const [users, setUsers] = useState(initialUsers);
+  const [factories, setFactories] = useState(initialFactories);
+  const [selectedFactoryId, setSelectedFactoryId] = useState(currentUser.factoryId);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -37,13 +41,22 @@ export default function AuthDashboardClient({
 
   const [pageDepts, setPageDepts] = useState(1);
   const [limitDepts, setLimitDepts] = useState(20);
+  const [pageFactories, setPageFactories] = useState(1);
+  const [limitFactories, setLimitFactories] = useState(20);
 
   // Reset pagination & search when tab switches
   useEffect(() => {
     setSearchTerm("");
     setPageUsers(1);
     setPageDepts(1);
+    setPageFactories(1);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (currentUser.isSystemAdmin) {
+      void refreshData(selectedFactoryId);
+    }
+  }, [selectedFactoryId]);
 
   // Dialog State
   const [userModalOpen, setUserModalOpen] = useState(false);
@@ -51,6 +64,9 @@ export default function AuthDashboardClient({
   
   const [deptModalOpen, setDeptModalOpen] = useState(false);
   const [selectedDept, setSelectedDept] = useState<any>(null);
+
+  const [factoryModalOpen, setFactoryModalOpen] = useState(false);
+  const [selectedFactory, setSelectedFactory] = useState<any>(null);
 
   // User Form State
   const [usernameForm, setUsernameForm] = useState("");
@@ -71,17 +87,30 @@ export default function AuthDashboardClient({
   const [deptPermissions, setDeptPermissions] = useState<Record<string, any>>({});
   const [deptFormError, setDeptFormError] = useState<string | null>(null);
 
+  const [factoryCodeForm, setFactoryCodeForm] = useState("");
+  const [factoryNameForm, setFactoryNameForm] = useState("");
+  const [factoryDescForm, setFactoryDescForm] = useState("");
+  const [factoryIsActiveForm, setFactoryIsActiveForm] = useState(true);
+  const [factoryFormError, setFactoryFormError] = useState<string | null>(null);
+
   // Fetch updated data
-  const refreshData = async () => {
+  const refreshData = async (factoryId = selectedFactoryId) => {
     setIsLoading(true);
     try {
-      const uRes = await fetch("/api/admin/users");
+      const queryString = currentUser.isSystemAdmin ? `?factoryId=${factoryId}` : "";
+      const uRes = await fetch(`/api/admin/users${queryString}`);
       const uData = await uRes.json();
       if (uData.success) setUsers(uData.data);
 
-      const dRes = await fetch("/api/admin/departments");
+      const dRes = await fetch(`/api/admin/departments${queryString}`);
       const dData = await dRes.json();
       if (dData.success) setDepartments(dData.data);
+
+      if (currentUser.isSystemAdmin) {
+        const fRes = await fetch("/api/admin/factories");
+        const fData = await fRes.json();
+        if (fData.success) setFactories(fData.data);
+      }
     } catch (error) {
       console.error("Refresh data error:", error);
     } finally {
@@ -126,6 +155,7 @@ export default function AuthDashboardClient({
       departmentId: deptIdForm || null,
       status: statusForm,
       isAdmin: isAdminForm,
+      factoryId: selectedFactoryId,
     };
 
     if (!selectedUser && !passwordForm) {
@@ -164,7 +194,7 @@ export default function AuthDashboardClient({
     if (!confirm("Bạn có chắc chắn muốn xóa tài khoản này không?")) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/users/${id}?factoryId=${selectedFactoryId}`, { method: "DELETE" });
       const data = await res.json();
       if (!data.success) {
         alert(data.error?.message || "Lỗi xóa người dùng");
@@ -199,7 +229,7 @@ export default function AuthDashboardClient({
       // Load permissions
       try {
         setIsLoading(true);
-        const res = await fetch(`/api/admin/departments/${deptItem.id}`);
+        const res = await fetch(`/api/admin/departments/${deptItem.id}?factoryId=${selectedFactoryId}`);
         const data = await res.json();
         if (data.success && data.data.permissions) {
           data.data.permissions.forEach((p: any) => {
@@ -265,6 +295,7 @@ export default function AuthDashboardClient({
       isAdmin: deptIsAdminForm,
       isActive: deptIsActiveForm,
       permissions: permissionsPayload,
+      factoryId: selectedFactoryId,
     };
 
     try {
@@ -298,13 +329,87 @@ export default function AuthDashboardClient({
     if (!confirm("Xóa phòng ban này sẽ làm ảnh hưởng đến phân quyền các thành viên thuộc phòng. Bạn có chắc chắn xóa?")) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/admin/departments/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/departments/${id}?factoryId=${selectedFactoryId}`, { method: "DELETE" });
       const data = await res.json();
       if (!data.success) {
         alert(data.error?.message || "Lỗi xóa phòng ban");
         return;
       }
       await refreshData();
+    } catch (err) {
+      alert("Lỗi kết nối");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openFactoryModal = (factoryItem: any = null) => {
+    setSelectedFactory(factoryItem);
+    setFactoryFormError(null);
+    if (factoryItem) {
+      setFactoryCodeForm(factoryItem.code);
+      setFactoryNameForm(factoryItem.name);
+      setFactoryDescForm(factoryItem.description || "");
+      setFactoryIsActiveForm(factoryItem.is_active ?? factoryItem.isActive ?? true);
+    } else {
+      setFactoryCodeForm("");
+      setFactoryNameForm("");
+      setFactoryDescForm("");
+      setFactoryIsActiveForm(true);
+    }
+    setFactoryModalOpen(true);
+  };
+
+  const handleFactorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFactoryFormError(null);
+
+    const payload = {
+      code: factoryCodeForm,
+      name: factoryNameForm,
+      description: factoryDescForm,
+      isActive: factoryIsActiveForm,
+    };
+
+    try {
+      setIsLoading(true);
+      const url = selectedFactory ? `/api/admin/factories/${selectedFactory.id}` : "/api/admin/factories";
+      const method = selectedFactory ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setFactoryFormError(data.error?.message || "Lỗi lưu xưởng.");
+        return;
+      }
+
+      setFactoryModalOpen(false);
+      await refreshData(selectedFactoryId);
+    } catch (err) {
+      setFactoryFormError("Lỗi kết nối server.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFactoryDelete = async (id: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa xưởng này không? Xưởng chỉ xóa được khi chưa có dữ liệu liên quan.")) return;
+    try {
+      setIsLoading(true);
+      const res = await fetch(`/api/admin/factories/${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!data.success) {
+        alert(data.error?.message || "Lỗi xóa xưởng");
+        return;
+      }
+      if (selectedFactoryId === id) {
+        const nextFactory = factories.find((f) => f.id !== id);
+        if (nextFactory) setSelectedFactoryId(nextFactory.id);
+      }
+      await refreshData(selectedFactoryId);
     } catch (err) {
       alert("Lỗi kết nối");
     } finally {
@@ -348,6 +453,16 @@ export default function AuthDashboardClient({
     pageDepts * limitDepts
   );
 
+  const filteredFactories = factories.filter(f =>
+    f.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    f.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const paginatedFactories = filteredFactories.slice(
+    (pageFactories - 1) * limitFactories,
+    pageFactories * limitFactories
+  );
+
   return (
     <div className="flex h-screen bg-zinc-50 text-zinc-900 font-sans antialiased overflow-hidden">
       {/* Sidebar Navigation */}
@@ -384,6 +499,17 @@ export default function AuthDashboardClient({
               <Shield className="w-5 h-5" />
               <span>Phòng ban & Phân quyền</span>
             </button>
+            {currentUser.isSystemAdmin && (
+              <button
+                onClick={() => { setActiveTab("factories"); setSearchTerm(""); }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                  activeTab === "factories" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+                }`}
+              >
+                <Building2 className="w-5 h-5" />
+                <span>Nhà xưởng</span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -422,6 +548,17 @@ export default function AuthDashboardClient({
 
           {/* User profile dropdown info */}
           <div className="flex items-center gap-4">
+            {currentUser.isSystemAdmin && (
+              <select
+                value={selectedFactoryId}
+                onChange={(e) => setSelectedFactoryId(e.target.value)}
+                className="border border-zinc-250 rounded-xl px-3 py-2 text-sm font-semibold bg-white text-zinc-700 outline-none cursor-pointer"
+              >
+                {factories.filter((factory) => factory.is_active ?? factory.isActive ?? true).map((factory) => (
+                  <option key={factory.id} value={factory.id}>{factory.name}</option>
+                ))}
+              </select>
+            )}
             <button className="p-2 text-zinc-400 hover:text-zinc-600 relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
@@ -720,6 +857,106 @@ export default function AuthDashboardClient({
                       <span className="px-2.5 py-1 bg-blue-600 text-white rounded-md font-bold mx-1">{pageDepts} / {totalPages}</span>
                       <button onClick={() => setPageDepts(p => Math.min(totalPages, p + 1))} disabled={pageDepts === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
                       <button onClick={() => setPageDepts(totalPages)} disabled={pageDepts === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronsRight className="w-3.5 h-3.5" /></button>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            {activeTab === "factories" && currentUser.isSystemAdmin && (() => {
+              const totalItems = filteredFactories.length;
+              const totalPages = Math.ceil(totalItems / limitFactories) || 1;
+              return (
+                <>
+                  <div className="px-6 py-4 border-b border-zinc-150 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white">
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Tìm xưởng..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value);
+                          setPageFactories(1);
+                        }}
+                        className="pl-10 pr-4 py-2 bg-white border border-zinc-250 rounded-xl text-sm w-60 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                      />
+                    </div>
+                    <button
+                      onClick={() => openFactoryModal()}
+                      className="btn-primary bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md shadow-blue-500/10 px-4 py-2 font-semibold text-sm flex items-center gap-2 cursor-pointer transition-colors shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Thêm xưởng</span>
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-auto min-h-0">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
+                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20">Mã xưởng</th>
+                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20">Tên xưởng</th>
+                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20">Mô tả</th>
+                          <th className="px-6 py-3 sticky top-0 bg-zinc-50 border-b border-zinc-100 z-20">Trạng thái</th>
+                          <th className="px-6 py-3 sticky top-0 right-0 bg-zinc-50 border-b border-zinc-100 border-l border-zinc-100 z-30 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right">Thao tác</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 text-sm">
+                        {paginatedFactories.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="px-6 py-8 text-center text-zinc-400">Không tìm thấy xưởng nào.</td>
+                          </tr>
+                        ) : (
+                          paginatedFactories.map((factory) => (
+                            <tr key={factory.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
+                              <td className="px-6 py-2.5 font-mono font-bold text-zinc-700">{factory.code}</td>
+                              <td className="px-6 py-2.5 font-semibold text-zinc-800">{factory.name}</td>
+                              <td className="px-6 py-2.5 text-zinc-500">{factory.description || "-"}</td>
+                              <td className="px-6 py-2.5">
+                                {(factory.is_active ?? factory.isActive) ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Kích hoạt</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">Tắt</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => openFactoryModal(factory)} className="icon-btn hover:text-blue-600 rounded-lg p-1.5 cursor-pointer" title="Sửa xưởng"><Edit2 className="w-4 h-4" /></button>
+                                  <button onClick={() => handleFactoryDelete(factory.id)} disabled={factory.code === "default"} className="icon-btn-danger hover:bg-red-50 hover:text-red-700 rounded-lg p-1.5 disabled:opacity-30 cursor-pointer" title="Xóa"><Trash2 className="w-4 h-4" /></button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="px-6 py-3.5 border-t border-zinc-200 flex items-center justify-between shrink-0 bg-zinc-50/50 text-xs text-zinc-500 font-semibold select-none">
+                    <div>Hiển thị {(pageFactories - 1) * limitFactories + 1}-{Math.min(pageFactories * limitFactories, totalItems)} / Tổng: {totalItems}</div>
+                    <div className="flex items-center gap-2">
+                      <span>Số hàng:</span>
+                      <select
+                        value={limitFactories}
+                        onChange={(e) => {
+                          setLimitFactories(Number(e.target.value));
+                          setPageFactories(1);
+                        }}
+                        className="bg-white border border-zinc-250 rounded-lg px-2 py-1 outline-none text-xs text-zinc-700 cursor-pointer font-bold"
+                      >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setPageFactories(1)} disabled={pageFactories === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronsLeft className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setPageFactories(p => Math.max(1, p - 1))} disabled={pageFactories === 1} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                      <span className="px-2.5 py-1 bg-blue-600 text-white rounded-md font-bold mx-1">{pageFactories} / {totalPages}</span>
+                      <button onClick={() => setPageFactories(p => Math.min(totalPages, p + 1))} disabled={pageFactories === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronRight className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setPageFactories(totalPages)} disabled={pageFactories === totalPages} className="p-1 border border-zinc-250 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer text-zinc-650"><ChevronsRight className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
                 </>

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth-session";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { DepartmentService } from "@/features/admin/services/department-service";
 import { UserService } from "@/features/admin/services/user-service";
+import { FactoryService } from "@/features/admin/services/factory-service";
 import { query } from "@/lib/db";
 import AuthDashboardClient from "./_components/auth-dashboard-client";
 
@@ -19,8 +20,11 @@ export default async function AuthModulePage() {
   }
 
   // Preload data on server side
-  const departments = await DepartmentService.getDepartments();
-  const users = await UserService.getUsers();
+  const factories = user.isSystemAdmin
+    ? await FactoryService.getFactories(true)
+    : [await FactoryService.getFactoryById(user.factoryId)].filter(Boolean);
+  const departments = await DepartmentService.getDepartments(user.factoryId);
+  const users = await UserService.getUsers(user.factoryId);
   
   // Get all active modules for permission mapping
   const modules = await query(
@@ -32,6 +36,7 @@ export default async function AuthModulePage() {
       currentUser={user}
       initialDepartments={departments}
       initialUsers={users}
+      initialFactories={factories}
       modules={modules}
     />
   );

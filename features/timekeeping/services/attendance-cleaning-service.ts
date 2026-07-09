@@ -5,17 +5,18 @@ export class AttendanceCleaningService {
   /**
    * Process all raw rows of an import task, clean them, and insert into attendance_records.
    */
-  static async cleanAndProcessImport(importId: string) {
+  static async cleanAndProcessImport(importId: string, factoryId: string) {
     return await transaction(async (client) => {
       // Get the import task details
       const imp = await client.query(
-        `SELECT id, payroll_cycle_id, file_name, status 
-         FROM attendance_imports 
-         WHERE id = $1`,
-        [importId]
+        `SELECT i.id, i.payroll_cycle_id, i.file_name, i.status, c.factory_id
+         FROM attendance_imports i
+         JOIN payroll_cycles c ON c.id = i.payroll_cycle_id
+         WHERE i.id = $1 AND c.factory_id = $2`,
+        [importId, factoryId]
       );
       if (imp.rows.length === 0) throw new Error("Không tìm thấy đợt import");
-      const { payroll_cycle_id } = imp.rows[0];
+      const { payroll_cycle_id, factory_id } = imp.rows[0];
 
       // Get all raw rows
       const rawRowsRes = await client.query(
@@ -190,8 +191,8 @@ export class AttendanceCleaningService {
         const existingEmployees = await client.query(
           `SELECT id, employee_code, deleted_at
            FROM employees
-           WHERE employee_code = ANY($1::text[])`,
-          [employeeCodes]
+           WHERE employee_code = ANY($1::text[]) AND factory_id = $2`,
+          [employeeCodes, factory_id]
         );
 
         const employeeIdByCode = new Map<string, string>();
@@ -228,8 +229,9 @@ export class AttendanceCleaningService {
                "departmentName" text,
                "positionTitle" text
              )
-             WHERE e.employee_code = employee_data."employeeCode"`,
-            [JSON.stringify(employeesToRestore)]
+             WHERE e.employee_code = employee_data."employeeCode"
+               AND e.factory_id = $2`,
+            [JSON.stringify(employeesToRestore), factory_id]
           );
         }
 
@@ -247,8 +249,8 @@ export class AttendanceCleaningService {
 
         if (missingEmployees.length > 0) {
           const insertedEmployees = await client.query(
-            `INSERT INTO employees (employee_code, full_name, department_name, position_title, status)
-             SELECT "employeeCode", "fullName", "departmentName", "positionTitle", 'active'
+            `INSERT INTO employees (factory_id, employee_code, full_name, department_name, position_title, status)
+             SELECT $2, "employeeCode", "fullName", "departmentName", "positionTitle", 'active'
              FROM jsonb_to_recordset($1::jsonb) AS employee_data(
                "employeeCode" text,
                "fullName" text,
@@ -256,7 +258,7 @@ export class AttendanceCleaningService {
                "positionTitle" text
              )
              RETURNING id, employee_code`,
-            [JSON.stringify(missingEmployees)]
+            [JSON.stringify(missingEmployees), factory_id]
           );
 
           for (const employee of insertedEmployees.rows) {
@@ -425,11 +427,11 @@ export class AttendanceCleaningService {
   /**
    * Get cleaned records whose work dates fall inside the selected cycle period.
    */
-  static async getRecordsByCycleId(cycleId: string, search?: string) {
+  static async getRecordsByCycleId(cycleId: string, factoryId: string, search?: string) {
     let sql = `WITH selected_cycle AS (
-                 SELECT period_start, period_end
+                 SELECT id, factory_id, period_start, period_end
                  FROM payroll_cycles
-                 WHERE id = $1
+                 WHERE id = $1 AND factory_id = $2
                ),
                cycle_attendance AS (
                  SELECT DISTINCT ON (COALESCE(ar.employee_id::text, ar.employee_code), ar.work_date)
@@ -441,9 +443,11 @@ export class AttendanceCleaningService {
                         ar.overtime_normal_hours, ar.overtime_sunday_hours,
                         ar.overtime_holiday_hours, ar.symbol, ar.total_hours
                  FROM attendance_records ar
+                 JOIN employees e ON e.id = ar.employee_id
                  CROSS JOIN selected_cycle sc
                  WHERE ar.work_date >= sc.period_start
                    AND ar.work_date <= sc.period_end
+                   AND e.factory_id = sc.factory_id
                  ORDER BY COALESCE(ar.employee_id::text, ar.employee_code), ar.work_date, ar.updated_at DESC, ar.created_at DESC, ar.id DESC
                )
                SELECT id, employee_code as "employeeCode", employee_name as "employeeName", work_date as "workDate",
@@ -455,10 +459,10 @@ export class AttendanceCleaningService {
                       overtime_holiday_hours as "overtimeHolidayHours", symbol, total_hours as "totalHours"
                FROM cycle_attendance
                WHERE true`;
-    const params: any[] = [cycleId];
+    const params: any[] = [cycleId, factoryId];
 
     if (search) {
-      sql += ` AND (employee_code ILIKE $2 OR employee_name ILIKE $2 OR department_name ILIKE $2)`;
+      sql += ` AND (employee_code ILIKE $3 OR employee_name ILIKE $3 OR department_name ILIKE $3)`;
       params.push(`%${search}%`);
     }
 

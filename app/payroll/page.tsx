@@ -19,8 +19,8 @@ export default async function PayrollPage() {
   }
 
   // Preload data on server side
-  const cycles = await PayrollCycleService.getCycles();
-  const employees = await EmployeeService.getEmployees();
+  const cycles = await PayrollCycleService.getCycles(user.factoryId);
+  const employees = await EmployeeService.getEmployees(user.factoryId);
   const rules = await PayrollRuleService.getRules();
 
   return (

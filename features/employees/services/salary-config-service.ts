@@ -51,13 +51,20 @@ export class SalaryConfigService {
   /**
    * Get all salary configurations for an employee
    */
-  static async getConfigsByEmployeeId(employeeId: string) {
+  static async getConfigsByEmployeeId(employeeId: string, factoryId: string) {
     return await query(
       `SELECT ${salaryConfigSelectFields}
        FROM employee_salary_configs
        WHERE employee_id = $1
+         AND EXISTS (
+           SELECT 1
+           FROM employees e
+           WHERE e.id = employee_salary_configs.employee_id
+             AND e.factory_id = $2
+             AND e.deleted_at IS NULL
+         )
        ORDER BY effective_from DESC`,
-      [employeeId]
+      [employeeId, factoryId]
     );
   }
 
@@ -80,10 +87,18 @@ export class SalaryConfigService {
   /**
    * Create new salary configuration. Auto-close the previous open configuration if any.
    */
-  static async createSalaryConfig(data: SalaryConfigData) {
+  static async createSalaryConfig(data: SalaryConfigData, factoryId: string) {
     const total = calculateTotalSalary(data);
 
     return await transaction(async (client) => {
+      const employee = await client.query(
+        `SELECT id FROM employees WHERE id = $1 AND factory_id = $2 AND deleted_at IS NULL`,
+        [data.employeeId, factoryId]
+      );
+      if (employee.rowCount === 0) {
+        throw new Error("Không tìm thấy nhân viên trong xưởng hiện tại.");
+      }
+
       const currentOpenConfig = await client.query(
         `SELECT id
          FROM employee_salary_configs
@@ -144,7 +159,7 @@ export class SalaryConfigService {
   /**
    * Update an existing salary configuration without creating a new history row.
    */
-  static async updateSalaryConfig(configId: string, data: SalaryConfigData) {
+  static async updateSalaryConfig(configId: string, data: SalaryConfigData, factoryId: string) {
     const total = calculateTotalSalary(data);
 
     return await queryOne(
@@ -166,7 +181,16 @@ export class SalaryConfigService {
            meal_allowance = $17,
            note = $18,
            updated_at = now()
-       WHERE id = $1 AND employee_id = $2 AND effective_to IS NULL
+       WHERE id = $1
+         AND employee_id = $2
+         AND effective_to IS NULL
+         AND EXISTS (
+           SELECT 1
+           FROM employees e
+           WHERE e.id = employee_salary_configs.employee_id
+             AND e.factory_id = $19
+             AND e.deleted_at IS NULL
+         )
        RETURNING ${salaryConfigSelectFields}`,
       [
         configId,
@@ -187,6 +211,7 @@ export class SalaryConfigService {
         data.otherBonus || 0,
         data.mealAllowance || 0,
         data.note || null,
+        factoryId,
       ]
     );
   }
@@ -194,7 +219,7 @@ export class SalaryConfigService {
   /**
    * Create the same salary configuration for many employees in one transaction.
    */
-  static async createBulkSalaryConfigs(data: BulkSalaryConfigData) {
+  static async createBulkSalaryConfigs(data: BulkSalaryConfigData, factoryId: string) {
     const employeeIds = Array.from(new Set(data.employeeIds));
     const total = calculateTotalSalary(data);
 
@@ -202,8 +227,8 @@ export class SalaryConfigService {
       const existingEmployees = await client.query(
         `SELECT id
          FROM employees
-         WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
-        [employeeIds]
+         WHERE id = ANY($1::uuid[]) AND factory_id = $2 AND deleted_at IS NULL`,
+        [employeeIds, factoryId]
       );
 
       if (existingEmployees.rowCount !== employeeIds.length) {

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { AttendanceCleaningService } from "@/features/timekeeping/services/attendance-cleaning-service";
 import { ApiResponse } from "@/lib/api-response";
+import { getCurrentUser } from "@/lib/auth-session";
 
 export async function GET(request: NextRequest) {
   try {
@@ -18,7 +19,10 @@ export async function GET(request: NextRequest) {
       return ApiResponse.badRequest("Mã chu kỳ thanh toán (cycleId) là bắt buộc.", "MISSING_FIELDS");
     }
 
-    const records = await AttendanceCleaningService.getRecordsByCycleId(cycleId, search);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    const records = await AttendanceCleaningService.getRecordsByCycleId(cycleId, currentUser.factoryId, search);
     return ApiResponse.success(records);
   } catch (error: any) {
     console.error("Error in GET attendance records:", error);

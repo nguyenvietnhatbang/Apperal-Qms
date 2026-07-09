@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { PermissionService } from "@/features/auth/services/permission-service";
 import { UserService } from "@/features/admin/services/user-service";
 import { ApiResponse } from "@/lib/api-response";
+import { getCurrentUser } from "@/lib/auth-session";
+import { resolveFactoryId } from "@/lib/factory-scope";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -15,7 +17,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    const user = await UserService.getUserById(id);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const { searchParams } = new URL(request.url);
+    const factoryId = resolveFactoryId(currentUser, searchParams.get("factoryId"));
+    const user = await UserService.getUserById(id, factoryId);
     
     if (!user) {
       return ApiResponse.notFound("Không tìm thấy người dùng.");
@@ -37,13 +43,18 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const { id } = await context.params;
     const body = await request.json();
-    const { departmentId, username, displayName, email, password, status, isAdmin } = body;
+    const { departmentId, username, displayName, email, password, status, isAdmin, factoryId: requestedFactoryId } = body;
 
     if (!username || !displayName) {
       return ApiResponse.badRequest("Mã đăng nhập và tên hiển thị không được để trống.", "MISSING_FIELDS");
     }
 
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = resolveFactoryId(currentUser, requestedFactoryId);
+
     const updatedUser = await UserService.updateUser(id, {
+      factoryId,
       departmentId,
       username,
       displayName,
@@ -68,7 +79,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     }
 
     const { id } = await context.params;
-    await UserService.deleteUser(id);
+    const currentUser = await getCurrentUser();
+    if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const { searchParams } = new URL(request.url);
+    const factoryId = resolveFactoryId(currentUser, searchParams.get("factoryId"));
+    await UserService.deleteUser(id, factoryId);
     return ApiResponse.success({ message: "Xóa người dùng thành công." });
   } catch (error: any) {
     console.error("Error in DELETE user:", error);
