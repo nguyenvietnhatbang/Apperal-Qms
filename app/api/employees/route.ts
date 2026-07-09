@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { EmployeeService } from "@/features/employees/services/employee-service";
 import { ApiResponse } from "@/lib/api-response";
 import { getCurrentUser } from "@/lib/auth-session";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,8 +16,9 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || undefined;
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    const employees = await EmployeeService.getEmployees(currentUser.factoryId, search);
+    const employees = await EmployeeService.getEmployees(factoryId, search);
     return ApiResponse.success(employees);
   } catch (error: any) {
     console.error("Error in GET employees:", error);
@@ -40,9 +42,10 @@ export async function POST(request: NextRequest) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, body.factoryId);
 
     const newEmp = await EmployeeService.createEmployee({
-      factoryId: currentUser.factoryId,
+      factoryId,
       employeeCode,
       fullName,
       gender,

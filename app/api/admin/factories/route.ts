@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { FactoryService } from "@/features/admin/services/factory-service";
 import { getCurrentUser } from "@/lib/auth-session";
 import { ApiResponse } from "@/lib/api-response";
+import { getAccessibleFactories } from "@/lib/factory-scope";
 
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Lỗi máy chủ";
 
@@ -16,9 +17,9 @@ export async function GET(request: NextRequest) {
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
 
-    if (!currentUser.isSystemAdmin && currentUser.factoryId) {
-      const factory = await FactoryService.getFactoryById(currentUser.factoryId);
-      return ApiResponse.success(factory ? [factory] : []);
+    if (!currentUser.isSystemAdmin) {
+      const factories = await getAccessibleFactories(currentUser);
+      return ApiResponse.success(factories);
     }
 
     const factories = await FactoryService.getFactories(true);

@@ -18,6 +18,9 @@ interface PayrollDashboardClientProps {
   initialCycles: any[];
   initialEmployees: any[];
   initialRules: any[];
+  factoryId: string;
+  activeFactory?: any;
+  accessibleFactories?: any[];
 }
 
 interface SalaryConfigItem {
@@ -97,9 +100,16 @@ export default function PayrollDashboardClient({
   initialCycles,
   initialEmployees,
   initialRules,
+  factoryId,
+  activeFactory,
 }: PayrollDashboardClientProps) {
   const router = useRouter();
   const isAuditOnlyUser = currentUser.username === "admin2";
+  const factoryName = activeFactory?.name || currentUser.factoryName;
+  const withFactory = (url: string) => {
+    const separator = url.includes("?") ? "&" : "?";
+    return `${url}${separator}factoryId=${encodeURIComponent(factoryId)}`;
+  };
   const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
     "employees"
   );
@@ -256,7 +266,7 @@ export default function PayrollDashboardClient({
   const loadAttendanceRecords = async () => {
     if (!selectedCycleId) return;
     try {
-      const res = await fetch(`/api/timekeeping/records?cycleId=${selectedCycleId}`);
+      const res = await fetch(withFactory(`/api/timekeeping/records?cycleId=${selectedCycleId}`));
       const data = await res.json();
       if (data.success) {
         setAttendanceRecords(data.data);
@@ -269,7 +279,7 @@ export default function PayrollDashboardClient({
   const loadPayrollSheet = async () => {
     if (!selectedCycleId) return;
     try {
-      const res = await fetch(`/api/payroll/items?cycleId=${selectedCycleId}`);
+      const res = await fetch(withFactory(`/api/payroll/items?cycleId=${selectedCycleId}`));
       const data = await res.json();
       if (data.success) {
         setPayrollSheetItems(data.data);
@@ -281,7 +291,7 @@ export default function PayrollDashboardClient({
 
   const loadAuditConfig = async () => {
     try {
-      const res = await fetch("/api/audit/config");
+      const res = await fetch(withFactory("/api/audit/config"));
       const data = await res.json();
       if (data.success) {
         setAuditConfig(data.data);
@@ -300,7 +310,7 @@ export default function PayrollDashboardClient({
   const loadAuditAttendanceRecords = async () => {
     if (!selectedCycleId) return;
     try {
-      const res = await fetch(`/api/audit/attendance?cycleId=${selectedCycleId}`);
+      const res = await fetch(withFactory(`/api/audit/attendance?cycleId=${selectedCycleId}`));
       const data = await res.json();
       if (data.success) {
         setAuditAttendanceRecords(data.data);
@@ -313,7 +323,7 @@ export default function PayrollDashboardClient({
   const loadAuditPayrollSheet = async () => {
     if (!selectedCycleId) return;
     try {
-      const res = await fetch(`/api/audit/payroll-items?cycleId=${selectedCycleId}`);
+      const res = await fetch(withFactory(`/api/audit/payroll-items?cycleId=${selectedCycleId}`));
       const data = await res.json();
       if (data.success) {
         setAuditPayrollSheetItems(data.data);
@@ -326,15 +336,15 @@ export default function PayrollDashboardClient({
   const refreshAllData = async () => {
     setIsLoading(true);
     try {
-      const cyRes = await fetch("/api/payroll/cycles");
+      const cyRes = await fetch(withFactory("/api/payroll/cycles"));
       const cyData = await cyRes.json();
       if (cyData.success) setCycles(cyData.data);
 
-      const emRes = await fetch("/api/employees");
+      const emRes = await fetch(withFactory("/api/employees"));
       const emData = await emRes.json();
       if (emData.success) setEmployees(emData.data);
 
-      const ruRes = await fetch("/api/payroll/rules");
+      const ruRes = await fetch(withFactory("/api/payroll/rules"));
       const ruData = await ruRes.json();
       if (ruData.success) setRules(ruData.data);
 
@@ -399,12 +409,12 @@ export default function PayrollDashboardClient({
 
     try {
       setIsLoading(true);
-      const url = selectedEmployee ? `/api/employees/${selectedEmployee.id}` : "/api/employees";
+      const url = selectedEmployee ? withFactory(`/api/employees/${selectedEmployee.id}`) : withFactory("/api/employees");
       const method = selectedEmployee ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, factoryId }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -424,7 +434,7 @@ export default function PayrollDashboardClient({
     if (!confirm("Bạn có muốn ngừng hoạt động/xóa nhân viên này?")) return;
     try {
       setIsLoading(true);
-      await fetch(`/api/employees/${id}`, { method: "DELETE" });
+      await fetch(withFactory(`/api/employees/${id}`), { method: "DELETE" });
       await refreshAllData();
     } catch (err) {
       console.error(err);
@@ -484,7 +494,7 @@ export default function PayrollDashboardClient({
 
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/employees/${emp.id}/salary-configs`);
+      const res = await fetch(withFactory(`/api/employees/${emp.id}/salary-configs`));
       const data = await res.json();
       if (data.success) {
         const configs = data.data as SalaryConfigItem[];
@@ -559,10 +569,10 @@ export default function PayrollDashboardClient({
         return;
       }
 
-      const res = await fetch(`/api/employees/${selectedEmployee.id}/salary-configs`, {
+      const res = await fetch(withFactory(`/api/employees/${selectedEmployee.id}/salary-configs`), {
         method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isEditing ? { ...payload, id: editingSalaryConfigId } : payload),
+        body: JSON.stringify(isEditing ? { ...payload, id: editingSalaryConfigId, factoryId } : { ...payload, factoryId }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -571,7 +581,7 @@ export default function PayrollDashboardClient({
       }
       
       // Reload configs list
-      const reloadRes = await fetch(`/api/employees/${selectedEmployee.id}/salary-configs`);
+      const reloadRes = await fetch(withFactory(`/api/employees/${selectedEmployee.id}/salary-configs`));
       const reloadData = await reloadRes.json();
       if (reloadData.success) {
         const configs = reloadData.data as SalaryConfigItem[];
@@ -680,6 +690,7 @@ export default function PayrollDashboardClient({
           otherBonus: bulkSalaryOtherBonusForm,
           mealAllowance: bulkSalaryMealAllowanceForm,
           note: bulkSalaryNoteForm,
+          factoryId,
         }),
       });
       const data = await res.json();
@@ -703,7 +714,7 @@ export default function PayrollDashboardClient({
   const handleRuleUpdate = async (id: string, code: string, val: number) => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/payroll/rules/${id}`, {
+      const res = await fetch(withFactory(`/api/payroll/rules/${id}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: val }),
@@ -739,7 +750,7 @@ export default function PayrollDashboardClient({
       const res = await fetch("/api/payroll/cycles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, factoryId }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -760,7 +771,7 @@ export default function PayrollDashboardClient({
     if (!confirm("Hệ thống sẽ tính toán lương cho toàn bộ nhân sự dựa trên chấm công đã làm sạch và cấu hình lương. Tiến hành?")) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/payroll/cycles/${cycleId}/calculate`, { method: "POST" });
+      const res = await fetch(withFactory(`/api/payroll/cycles/${cycleId}/calculate`), { method: "POST" });
       const data = await res.json();
       if (!data.success) {
         alert(data.error?.message || "Lỗi tính lương");
@@ -787,7 +798,7 @@ export default function PayrollDashboardClient({
 
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/timekeeping/imports?cycleId=${encodeURIComponent(selectedCycleId)}`, {
+      const res = await fetch(withFactory(`/api/timekeeping/imports?cycleId=${encodeURIComponent(selectedCycleId)}`), {
         method: "DELETE",
       });
       const data = await res.json();
@@ -811,7 +822,7 @@ export default function PayrollDashboardClient({
     if (!cycleId) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/audit/cycles/${cycleId}/run`, { method: "POST" });
+      const res = await fetch(withFactory(`/api/audit/cycles/${cycleId}/run`), { method: "POST" });
       const data = await res.json();
       if (!data.success) {
         alert(data.error?.message || (isAuditOnlyUser ? "Lỗi xử lý dữ liệu" : "Lỗi chạy audit"));
@@ -833,7 +844,7 @@ export default function PayrollDashboardClient({
     setAuditConfigStatus(null);
     try {
       setIsLoading(true);
-      const res = await fetch("/api/audit/config", {
+      const res = await fetch(withFactory("/api/audit/config"), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -864,10 +875,10 @@ export default function PayrollDashboardClient({
     if (!confirm(msg)) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/payroll/cycles/${cycleId}`, {
+      const res = await fetch(withFactory(`/api/payroll/cycles/${cycleId}`), {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, factoryId }),
       });
       const data = await res.json();
       if (!data.success) {
@@ -892,7 +903,7 @@ export default function PayrollDashboardClient({
     if (!confirm("Bạn có chắc chắn muốn xóa chu kỳ nháp/đã hủy này? Mọi dữ liệu liên quan đến chu kỳ sẽ bị xóa.")) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/payroll/cycles/${cycleId}`, { method: "DELETE" });
+      const res = await fetch(withFactory(`/api/payroll/cycles/${cycleId}`), { method: "DELETE" });
       const data = await res.json();
       if (!data.success) {
         alert(data.error?.message || "Lỗi xóa chu kỳ");
@@ -922,6 +933,7 @@ export default function PayrollDashboardClient({
     const formData = new FormData();
     formData.append("file", uploadFile);
     formData.append("cycleId", selectedCycleId);
+    formData.append("factoryId", factoryId);
 
     setUploadStatus(null);
     setUploadStep(1); // Uploading file (20%)
@@ -966,7 +978,7 @@ export default function PayrollDashboardClient({
     if (!selectedCycleId) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/payroll/items?cycleId=${selectedCycleId}&employeeId=${employeeId}`);
+      const res = await fetch(withFactory(`/api/payroll/items?cycleId=${selectedCycleId}&employeeId=${employeeId}`));
       const data = await res.json();
       if (data.success) {
         setActivePayslip(data.data);
@@ -985,7 +997,7 @@ export default function PayrollDashboardClient({
     if (!selectedCycleId) return;
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/payroll/items/export?cycleId=${selectedCycleId}&source=${source}`);
+      const res = await fetch(withFactory(`/api/payroll/items/export?cycleId=${selectedCycleId}&source=${source}`));
       if (!res.ok) {
         alert("Không thể xuất file Excel bảng lương.");
         return;
@@ -1279,7 +1291,7 @@ export default function PayrollDashboardClient({
             <ChevronRight className="w-4 h-4 text-zinc-300" />
             <span className="text-zinc-800 font-semibold">Chấm công & Tính lương</span>
             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
-              {currentUser.factoryName}
+              {factoryName}
             </span>
           </div>
 
@@ -1308,7 +1320,7 @@ export default function PayrollDashboardClient({
                   {currentUser.isAdmin ? "Admin" : currentUser.departmentName || "Thành viên"}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-emerald-700">
-                  {currentUser.factoryName}
+                  {factoryName}
                 </p>
               </div>
               <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/10">

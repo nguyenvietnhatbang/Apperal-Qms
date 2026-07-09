@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { EmployeeService } from "@/features/employees/services/employee-service";
 import { ApiResponse } from "@/lib/api-response";
 import { getCurrentUser } from "@/lib/auth-session";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -18,8 +19,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const { searchParams } = new URL(request.url);
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    const emp = await EmployeeService.getEmployeeById(id, currentUser.factoryId);
+    const emp = await EmployeeService.getEmployeeById(id, factoryId);
     
     if (!emp) {
       return ApiResponse.notFound("Không tìm thấy nhân viên.");
@@ -49,9 +52,10 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, body.factoryId);
 
     const updatedEmp = await EmployeeService.updateEmployee(id, {
-      factoryId: currentUser.factoryId,
+      factoryId,
       employeeCode,
       fullName,
       gender,
@@ -80,8 +84,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const { searchParams } = new URL(request.url);
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    await EmployeeService.deleteEmployee(id, currentUser.factoryId);
+    await EmployeeService.deleteEmployee(id, factoryId);
     return ApiResponse.success({ message: "Xóa nhân viên thành công." });
   } catch (error: any) {
     console.error("Error in DELETE employee:", error);

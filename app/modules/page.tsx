@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-session";
+import { getAccessibleFactories } from "@/lib/factory-scope";
 import { query } from "@/lib/db";
 import {
   ArrowUpRight,
@@ -37,6 +38,9 @@ export default async function ModulesPage() {
         const perm = user.permissions[mod.code];
         return perm && perm.view;
       });
+  const authModule = allowedModules.find((mod) => mod.code === "auth");
+  const payrollModule = allowedModules.find((mod) => mod.code === "payroll");
+  const payrollFactories = payrollModule ? await getAccessibleFactories(user) : [];
 
   const getModuleIcon = (code: string) => {
     switch (code) {
@@ -150,7 +154,7 @@ export default async function ModulesPage() {
           </button>
         </div>
 
-        {allowedModules.length === 0 ? (
+        {!authModule && payrollFactories.length === 0 ? (
           <div className="mt-12 max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
             <ShieldCheck className="mx-auto mb-3 h-12 w-12 text-slate-300" />
             <h3 className="text-lg font-black text-slate-900">Không có quyền truy cập</h3>
@@ -160,7 +164,17 @@ export default async function ModulesPage() {
           </div>
         ) : (
           <div className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {allowedModules.map((mod) => {
+            {[
+              ...(user.isSystemAdmin && authModule ? [authModule] : []),
+              ...payrollFactories.map((factory: any) => ({
+                ...payrollModule,
+                id: `${payrollModule.id}-${factory.id}`,
+                name: factory.name,
+                description: payrollModule.description,
+                routePath: `/payroll?factoryId=${factory.id}`,
+                code: "payroll",
+              })),
+            ].map((mod) => {
               const accent = getModuleAccent(mod.code);
 
               return (

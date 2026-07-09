@@ -107,6 +107,18 @@ CREATE TABLE IF NOT EXISTS user_sessions (
   revoked_at timestamptz
 );
 
+CREATE TABLE IF NOT EXISTS user_factory_memberships (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
+  department_id uuid REFERENCES departments(id) ON DELETE SET NULL,
+  is_default boolean NOT NULL DEFAULT false,
+  is_active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  deleted_at timestamptz
+);
+
 CREATE TABLE IF NOT EXISTS employees (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
@@ -150,7 +162,8 @@ CREATE TABLE IF NOT EXISTS employee_salary_configs (
 
 CREATE TABLE IF NOT EXISTS payroll_rules (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  code varchar(80) NOT NULL UNIQUE,
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
+  code varchar(80) NOT NULL,
   name varchar(150) NOT NULL,
   value numeric(14,4) NOT NULL,
   unit varchar(30) NOT NULL,
@@ -304,7 +317,8 @@ CREATE TABLE IF NOT EXISTS payroll_audit_logs (
 
 CREATE TABLE IF NOT EXISTS audit_configs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  code varchar(80) NOT NULL UNIQUE,
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
+  code varchar(80) NOT NULL,
   name varchar(150) NOT NULL,
   max_overtime_hours_per_day numeric(8,2) NOT NULL DEFAULT 4,
   max_overtime_hours_per_month numeric(8,2) NOT NULL DEFAULT 40,
@@ -412,17 +426,14 @@ CREATE TABLE IF NOT EXISTS audit_payroll_item_lines (
 
 INSERT INTO factories (code, name, description, is_active)
 VALUES ('default', 'Xưởng mặc định', 'Xưởng mặc định dùng để giữ dữ liệu hiện có khi nâng cấp nhiều xưởng.', true)
-ON CONFLICT (code) DO UPDATE
-SET
-  name = EXCLUDED.name,
-  description = EXCLUDED.description,
-  is_active = EXCLUDED.is_active,
-  updated_at = now();
+ON CONFLICT (code) DO NOTHING;
 
 ALTER TABLE departments ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE payroll_cycles ADD COLUMN IF NOT EXISTS factory_id uuid;
+ALTER TABLE payroll_rules ADD COLUMN IF NOT EXISTS factory_id uuid;
+ALTER TABLE audit_configs ADD COLUMN IF NOT EXISTS factory_id uuid;
 
 UPDATE departments
 SET factory_id = (SELECT id FROM factories WHERE code = 'default')
@@ -443,16 +454,28 @@ UPDATE payroll_cycles
 SET factory_id = (SELECT id FROM factories WHERE code = 'default')
 WHERE factory_id IS NULL;
 
+UPDATE payroll_rules
+SET factory_id = (SELECT id FROM factories WHERE code = 'default')
+WHERE factory_id IS NULL;
+
+UPDATE audit_configs
+SET factory_id = (SELECT id FROM factories WHERE code = 'default')
+WHERE factory_id IS NULL;
+
 ALTER TABLE departments ALTER COLUMN factory_id SET NOT NULL;
 ALTER TABLE app_users ALTER COLUMN factory_id SET NOT NULL;
 ALTER TABLE employees ALTER COLUMN factory_id SET NOT NULL;
 ALTER TABLE payroll_cycles ALTER COLUMN factory_id SET NOT NULL;
+ALTER TABLE payroll_rules ALTER COLUMN factory_id SET NOT NULL;
+ALTER TABLE audit_configs ALTER COLUMN factory_id SET NOT NULL;
 
 DO $$
 BEGIN
   ALTER TABLE departments DROP CONSTRAINT IF EXISTS departments_code_key;
   ALTER TABLE employees DROP CONSTRAINT IF EXISTS employees_employee_code_key;
   ALTER TABLE payroll_cycles DROP CONSTRAINT IF EXISTS payroll_cycles_code_key;
+  ALTER TABLE payroll_rules DROP CONSTRAINT IF EXISTS payroll_rules_code_key;
+  ALTER TABLE audit_configs DROP CONSTRAINT IF EXISTS audit_configs_code_key;
 
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'departments_factory_fk') THEN
     ALTER TABLE departments
@@ -473,7 +496,23 @@ BEGIN
     ALTER TABLE payroll_cycles
       ADD CONSTRAINT payroll_cycles_factory_fk FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT;
   END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payroll_rules_factory_fk') THEN
+    ALTER TABLE payroll_rules
+      ADD CONSTRAINT payroll_rules_factory_fk FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'audit_configs_factory_fk') THEN
+    ALTER TABLE audit_configs
+      ADD CONSTRAINT audit_configs_factory_fk FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT;
+  END IF;
 END $$;
+
+INSERT INTO user_factory_memberships (user_id, factory_id, department_id, is_default, is_active)
+SELECT id, factory_id, department_id, true, true
+FROM app_users
+WHERE deleted_at IS NULL
+ON CONFLICT DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_department_permissions_module
   ON department_module_permissions (module_id);
@@ -487,6 +526,14 @@ CREATE INDEX IF NOT EXISTS idx_app_users_department_status
 
 CREATE INDEX IF NOT EXISTS idx_app_users_factory_status
   ON app_users (factory_id, status)
+  WHERE deleted_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_factory_memberships_unique_active
+  ON user_factory_memberships (user_id, factory_id)
+  WHERE deleted_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_user_factory_memberships_factory
+  ON user_factory_memberships (factory_id, is_active)
   WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_expires
@@ -508,6 +555,12 @@ CREATE INDEX IF NOT EXISTS idx_payroll_cycles_period_status
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_cycles_factory_code_unique
   ON payroll_cycles (factory_id, code);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payroll_rules_factory_code_unique
+  ON payroll_rules (factory_id, code);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_configs_factory_code_unique
+  ON audit_configs (factory_id, code);
 
 CREATE INDEX IF NOT EXISTS idx_attendance_records_cycle_employee_date
   ON attendance_records (payroll_cycle_id, employee_code, work_date);
@@ -570,19 +623,24 @@ SET
   can_approve = true,
   updated_at = now();
 
-INSERT INTO payroll_rules (code, name, value, unit, description)
-VALUES
-  ('standard_hours_per_day', 'Số giờ công chuẩn mỗi ngày', 8, 'hours', 'Dùng để quy đổi lương ngày sang lương giờ.'),
-  ('overtime_normal_rate', 'Hệ số tăng ca ngày thường', 1.5, 'multiplier', 'Theo mẫu phiếu lương: tăng ca thường 150%.'),
-  ('overtime_sunday_rate', 'Hệ số tăng ca Chủ Nhật', 2, 'multiplier', 'Theo mẫu phiếu lương: tăng ca Chủ Nhật 200%.'),
-  ('overtime_holiday_rate', 'Hệ số tăng ca ngày lễ', 3, 'multiplier', 'Theo mẫu phiếu lương: tăng ca lễ 300%.'),
-  ('employee_insurance_rate', 'BHXH/BHYT/BHTN khấu trừ nhân viên', 0.105, 'percent', 'Theo mẫu phiếu lương: khấu trừ 10,5%.'),
-  ('company_social_insurance_rate', 'BHXH công ty đóng', 0.175, 'percent', 'Theo bảng lương: BHXH 17,5% công ty trả.'),
-  ('company_health_insurance_rate', 'BHYT công ty đóng', 0.03, 'percent', 'Theo bảng lương: BHYT 3% công ty trả.'),
-  ('company_unemployment_insurance_rate', 'BHTN công ty đóng', 0.01, 'percent', 'Theo bảng lương: BHTN 1% công ty trả.'),
-  ('company_union_rate', 'Công đoàn công ty đóng', 0.02, 'percent', 'Theo bảng lương: công đoàn 2%.'),
-  ('employee_union_rate', 'Đoàn phí nhân viên', 0.01, 'percent', 'Theo phiếu lương có dòng đoàn phí 1%.')
-ON CONFLICT (code) DO UPDATE
+INSERT INTO payroll_rules (factory_id, code, name, value, unit, description)
+SELECT f.id, rule_data.code, rule_data.name, rule_data.value, rule_data.unit, rule_data.description
+FROM factories f
+CROSS JOIN (
+  VALUES
+    ('standard_hours_per_day', 'Số giờ công chuẩn mỗi ngày', 8::numeric, 'hours', 'Dùng để quy đổi lương ngày sang lương giờ.'),
+    ('overtime_normal_rate', 'Hệ số tăng ca ngày thường', 1.5::numeric, 'multiplier', 'Theo mẫu phiếu lương: tăng ca thường 150%.'),
+    ('overtime_sunday_rate', 'Hệ số tăng ca Chủ Nhật', 2::numeric, 'multiplier', 'Theo mẫu phiếu lương: tăng ca Chủ Nhật 200%.'),
+    ('overtime_holiday_rate', 'Hệ số tăng ca ngày lễ', 3::numeric, 'multiplier', 'Theo mẫu phiếu lương: tăng ca lễ 300%.'),
+    ('employee_insurance_rate', 'BHXH/BHYT/BHTN khấu trừ nhân viên', 0.105::numeric, 'percent', 'Theo mẫu phiếu lương: khấu trừ 10,5%.'),
+    ('company_social_insurance_rate', 'BHXH công ty đóng', 0.175::numeric, 'percent', 'Theo bảng lương: BHXH 17,5% công ty trả.'),
+    ('company_health_insurance_rate', 'BHYT công ty đóng', 0.03::numeric, 'percent', 'Theo bảng lương: BHYT 3% công ty trả.'),
+    ('company_unemployment_insurance_rate', 'BHTN công ty đóng', 0.01::numeric, 'percent', 'Theo bảng lương: BHTN 1% công ty trả.'),
+    ('company_union_rate', 'Công đoàn công ty đóng', 0.02::numeric, 'percent', 'Theo bảng lương: công đoàn 2%.'),
+    ('employee_union_rate', 'Đoàn phí nhân viên', 0.01::numeric, 'percent', 'Theo phiếu lương có dòng đoàn phí 1%.')
+) AS rule_data(code, name, value, unit, description)
+WHERE f.code = 'default'
+ON CONFLICT (factory_id, code) DO UPDATE
 SET
   name = EXCLUDED.name,
   value = EXCLUDED.value,
@@ -591,6 +649,7 @@ SET
   updated_at = now();
 
 INSERT INTO audit_configs (
+  factory_id,
   code,
   name,
   max_overtime_hours_per_day,
@@ -600,7 +659,8 @@ INSERT INTO audit_configs (
   enable_overtime_tier_2,
   note
 )
-VALUES (
+SELECT
+  id,
   'default',
   'Audit bảng số 1',
   4,
@@ -609,8 +669,9 @@ VALUES (
   false,
   false,
   'Theo yêu cầu khách: không TC2, TC1 lấy số lẻ dưới hoặc bằng 4h/ngày, tối đa 40h/tháng, 300h/năm, không đi làm Chủ Nhật.'
-)
-ON CONFLICT (code) DO UPDATE
+FROM factories
+WHERE code = 'default'
+ON CONFLICT (factory_id, code) DO UPDATE
 SET
   name = EXCLUDED.name,
   max_overtime_hours_per_day = EXCLUDED.max_overtime_hours_per_day,
@@ -647,6 +708,14 @@ JOIN factories f ON f.id = d.factory_id
 WHERE d.code = 'admin' AND f.code = 'default'
 ON CONFLICT (username) DO NOTHING;
 
+INSERT INTO user_factory_memberships (user_id, factory_id, department_id, is_default, is_active)
+SELECT u.id, d.factory_id, d.id, true, true
+FROM app_users u
+JOIN departments d ON d.factory_id = u.factory_id
+JOIN factories f ON f.id = d.factory_id
+WHERE u.username = 'admin' AND d.code = 'admin' AND f.code = 'default'
+ON CONFLICT DO NOTHING;
+
 -- Optional audit-focused bootstrap user.
 -- Username: admin2
 -- Temporary password: Admin2@123
@@ -672,3 +741,11 @@ FROM departments d
 JOIN factories f ON f.id = d.factory_id
 WHERE d.code = 'admin' AND f.code = 'default'
 ON CONFLICT (username) DO NOTHING;
+
+INSERT INTO user_factory_memberships (user_id, factory_id, department_id, is_default, is_active)
+SELECT u.id, d.factory_id, d.id, true, true
+FROM app_users u
+JOIN departments d ON d.factory_id = u.factory_id
+JOIN factories f ON f.id = d.factory_id
+WHERE u.username = 'admin2' AND d.code = 'admin' AND f.code = 'default'
+ON CONFLICT DO NOTHING;

@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { PayrollExportService } from "@/features/payroll/services/payroll-export-service";
 import { ApiResponse } from "@/lib/api-response";
 import { getCurrentUser } from "@/lib/auth-session";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 export const runtime = "nodejs";
 
@@ -27,8 +28,9 @@ export async function GET(request: NextRequest) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    const exportResult = await PayrollExportService.exportPayrollWorkbook(cycleId, source, currentUser.factoryId);
+    const exportResult = await PayrollExportService.exportPayrollWorkbook(cycleId, source, factoryId);
 
     return new Response(new Uint8Array(exportResult.buffer), {
       headers: {

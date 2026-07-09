@@ -23,7 +23,7 @@ export class PayrollCalculationService {
       }
 
       // 2. Fetch global rules
-      const rules = await PayrollRuleService.getRulesMap();
+      const rules = await PayrollRuleService.getRulesMap(cycle.factory_id);
       const stdWorkdays = parseFloat(cycle.standard_workdays);
       const stdHoursPerDay = parseFloat(cycle.standard_hours_per_day);
       

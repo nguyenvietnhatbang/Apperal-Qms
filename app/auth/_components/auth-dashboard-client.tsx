@@ -31,6 +31,9 @@ export default function AuthDashboardClient({
   const [users, setUsers] = useState(initialUsers);
   const [factories, setFactories] = useState(initialFactories);
   const [selectedFactoryId, setSelectedFactoryId] = useState(currentUser.factoryId);
+  const [departmentsByFactory, setDepartmentsByFactory] = useState<Record<string, any[]>>({
+    [currentUser.factoryId]: initialDepartments,
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -68,6 +71,7 @@ export default function AuthDashboardClient({
   const [emailForm, setEmailForm] = useState("");
   const [passwordForm, setPasswordForm] = useState("");
   const [deptIdForm, setDeptIdForm] = useState("");
+  const [userMembershipsForm, setUserMembershipsForm] = useState<Record<string, { enabled: boolean; departmentId: string; isDefault: boolean }>>({});
   const [statusForm, setStatusForm] = useState<"active" | "inactive" | "locked">("active");
   const [isAdminForm, setIsAdminForm] = useState(false);
   const [userFormError, setUserFormError] = useState<string | null>(null);
@@ -92,7 +96,7 @@ export default function AuthDashboardClient({
     setIsLoading(true);
     try {
       const queryString = currentUser.isSystemAdmin ? `?factoryId=${factoryId}` : "";
-      const uRes = await fetch(`/api/admin/users${queryString}`);
+      const uRes = await fetch(currentUser.isSystemAdmin ? "/api/admin/users" : `/api/admin/users${queryString}`);
       const uData = await uRes.json();
       if (uData.success) setUsers(uData.data);
 
@@ -103,7 +107,16 @@ export default function AuthDashboardClient({
       if (currentUser.isSystemAdmin) {
         const fRes = await fetch("/api/admin/factories");
         const fData = await fRes.json();
-        if (fData.success) setFactories(fData.data);
+        if (fData.success) {
+          setFactories(fData.data);
+          const nextDepartmentsByFactory: Record<string, any[]> = {};
+          for (const factory of fData.data) {
+            const deptRes = await fetch(`/api/admin/departments?factoryId=${factory.id}`);
+            const deptData = await deptRes.json();
+            if (deptData.success) nextDepartmentsByFactory[factory.id] = deptData.data;
+          }
+          setDepartmentsByFactory(nextDepartmentsByFactory);
+        }
       }
     } catch (error) {
       console.error("Refresh data error:", error);
@@ -130,6 +143,16 @@ export default function AuthDashboardClient({
       setDeptIdForm(userItem.department_id || "");
       setStatusForm(userItem.status);
       setIsAdminForm(userItem.is_admin);
+      const membershipMap: Record<string, { enabled: boolean; departmentId: string; isDefault: boolean }> = {};
+      factories.forEach((factory) => {
+        const membership = (userItem.memberships || []).find((item: any) => item.factoryId === factory.id);
+        membershipMap[factory.id] = {
+          enabled: Boolean(membership),
+          departmentId: membership?.departmentId || "",
+          isDefault: Boolean(membership?.isDefault),
+        };
+      });
+      setUserMembershipsForm(membershipMap);
     } else {
       setUsernameForm("");
       setDisplayNameForm("");
@@ -138,6 +161,15 @@ export default function AuthDashboardClient({
       setDeptIdForm("");
       setStatusForm("active");
       setIsAdminForm(false);
+      const membershipMap: Record<string, { enabled: boolean; departmentId: string; isDefault: boolean }> = {};
+      factories.forEach((factory, index) => {
+        membershipMap[factory.id] = {
+          enabled: factory.id === selectedFactoryId || (!selectedFactoryId && index === 0),
+          departmentId: "",
+          isDefault: factory.id === selectedFactoryId || (!selectedFactoryId && index === 0),
+        };
+      });
+      setUserMembershipsForm(membershipMap);
     }
     setUserModalOpen(true);
   };
@@ -147,16 +179,36 @@ export default function AuthDashboardClient({
     e.preventDefault();
     setUserFormError(null);
 
+    const memberships = Object.entries(userMembershipsForm)
+      .filter(([, membership]) => membership.enabled)
+      .map(([factoryId, membership]) => ({
+        factoryId,
+        departmentId: membership.departmentId || null,
+        isDefault: membership.isDefault,
+        isActive: true,
+      }));
+    const fallbackFactoryId = memberships.find((membership) => membership.isDefault)?.factoryId || memberships[0]?.factoryId || selectedFactoryId;
+    const normalizedMemberships = memberships.map((membership) => ({
+      ...membership,
+      isDefault: membership.factoryId === fallbackFactoryId,
+    }));
+
     const payload = {
       username: usernameForm,
       displayName: displayNameForm,
       email: emailForm,
       password: passwordForm || undefined,
-      departmentId: deptIdForm || null,
+      departmentId: normalizedMemberships.find((membership) => membership.factoryId === fallbackFactoryId)?.departmentId || deptIdForm || null,
       status: statusForm,
       isAdmin: isAdminForm,
-      factoryId: selectedFactoryId,
+      factoryId: fallbackFactoryId,
+      memberships: normalizedMemberships,
     };
+
+    if (memberships.length === 0) {
+      setUserFormError("Vui lòng cấp ít nhất một xưởng cho tài khoản.");
+      return;
+    }
 
     if (!selectedUser && !passwordForm) {
       setUserFormError("Mật khẩu là bắt buộc cho tài khoản mới.");
@@ -1041,6 +1093,80 @@ export default function AuthDashboardClient({
                     </select>
                   </div>
                 </div>
+
+                {currentUser.isSystemAdmin && (
+                  <div className="rounded-xl border border-zinc-200 overflow-hidden">
+                    <div className="bg-zinc-50 border-b border-zinc-200 px-4 py-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-600">Xưởng được truy cập</h4>
+                    </div>
+                    <div className="divide-y divide-zinc-100">
+                      {factories.map((factory) => {
+                        const membership = userMembershipsForm[factory.id] || { enabled: false, departmentId: "", isDefault: false };
+                        const factoryDepartments = departmentsByFactory[factory.id] || [];
+                        return (
+                          <div key={factory.id} className="grid grid-cols-[1fr_180px_80px] gap-3 px-4 py-3 items-center">
+                            <label className="flex items-center gap-2 text-sm font-semibold text-zinc-700 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={membership.enabled}
+                                onChange={(e) => {
+                                  const enabled = e.target.checked;
+                                  setUserMembershipsForm((current) => ({
+                                    ...current,
+                                    [factory.id]: {
+                                      ...membership,
+                                      enabled,
+                                      isDefault: enabled && !Object.entries(current).some(([id, item]) => id !== factory.id && item.enabled && item.isDefault),
+                                    },
+                                  }));
+                                }}
+                                className="w-4 h-4 text-blue-600 border-zinc-300 rounded focus:ring-blue-500 cursor-pointer"
+                              />
+                              <span>{factory.name}</span>
+                            </label>
+                            <select
+                              value={membership.departmentId}
+                              disabled={!membership.enabled}
+                              onChange={(e) => {
+                                setUserMembershipsForm((current) => ({
+                                  ...current,
+                                  [factory.id]: { ...membership, departmentId: e.target.value },
+                                }));
+                              }}
+                              className="input rounded-xl border-zinc-250 text-sm disabled:bg-zinc-100 disabled:text-zinc-400"
+                            >
+                              <option value="">-- Chưa phân phòng --</option>
+                              {factoryDepartments.map((department) => (
+                                <option key={department.id} value={department.id}>
+                                  {department.name} {department.is_admin ? "(Admin)" : ""}
+                                </option>
+                              ))}
+                            </select>
+                            <label className="flex items-center justify-end gap-2 text-xs font-bold text-zinc-500">
+                              <input
+                                type="radio"
+                                name="defaultFactory"
+                                checked={membership.enabled && membership.isDefault}
+                                disabled={!membership.enabled}
+                                onChange={() => {
+                                  setUserMembershipsForm((current) => {
+                                    const next: Record<string, { enabled: boolean; departmentId: string; isDefault: boolean }> = {};
+                                    Object.keys(current).forEach((id) => {
+                                      next[id] = { ...current[id], isDefault: id === factory.id };
+                                    });
+                                    return next;
+                                  });
+                                }}
+                                className="w-4 h-4 text-blue-600 border-zinc-300 focus:ring-blue-500 cursor-pointer"
+                              />
+                              Mặc định
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-bold text-zinc-550 uppercase tracking-wider mb-1.5">

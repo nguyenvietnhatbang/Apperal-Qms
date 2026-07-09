@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth-session";
 import { AttendanceImportService } from "@/features/timekeeping/services/attendance-import-service";
 import { AttendanceCleaningService } from "@/features/timekeeping/services/attendance-cleaning-service";
 import { ApiResponse } from "@/lib/api-response";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 function getErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
@@ -25,8 +26,9 @@ export async function GET(request: NextRequest) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    const imports = await AttendanceImportService.getImportsByCycleId(cycleId, currentUser.factoryId);
+    const imports = await AttendanceImportService.getImportsByCycleId(cycleId, factoryId);
     return ApiResponse.success(imports);
   } catch (error: unknown) {
     console.error("Error in GET imports:", error);
@@ -47,6 +49,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const cycleId = formData.get("cycleId") as string | null;
+    const requestedFactoryId = formData.get("factoryId") as string | null;
 
     if (!file || !cycleId) {
       return ApiResponse.badRequest("File chấm công và cycleId là bắt buộc.", "MISSING_FIELDS");
@@ -55,6 +58,7 @@ export async function POST(request: NextRequest) {
     // Convert file to Buffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    const factoryId = await resolveAccessibleFactoryId(currentUser, requestedFactoryId);
 
     // 1. Import raw rows
     const { importId, totalRows } = await AttendanceImportService.importRawData(
@@ -62,12 +66,12 @@ export async function POST(request: NextRequest) {
       file.name,
       buffer,
       currentUser.id,
-      currentUser.factoryId,
+      factoryId,
       currentUser.isAdmin
     );
 
     // 2. Clean and standardize the rows
-    const cleanResults = await AttendanceCleaningService.cleanAndProcessImport(importId, currentUser.factoryId);
+    const cleanResults = await AttendanceCleaningService.cleanAndProcessImport(importId, factoryId);
 
     return ApiResponse.success({
       message: "Import và làm sạch chấm công thành công.",
@@ -97,11 +101,12 @@ export async function DELETE(request: NextRequest) {
     if (!cycleId) {
       return ApiResponse.badRequest("Mã chu kỳ thanh toán (cycleId) là bắt buộc.", "MISSING_FIELDS");
     }
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
     const result = await AttendanceImportService.deleteCycleImportData(
       cycleId,
       currentUser.id,
-      currentUser.factoryId,
+      factoryId,
       currentUser.isAdmin
     );
     return ApiResponse.success({

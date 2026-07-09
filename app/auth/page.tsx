@@ -24,7 +24,7 @@ export default async function AuthModulePage() {
     ? await FactoryService.getFactories(true)
     : [await FactoryService.getFactoryById(user.factoryId)].filter(Boolean);
   const departments = await DepartmentService.getDepartments(user.factoryId);
-  const users = await UserService.getUsers(user.factoryId);
+  const users = await UserService.getUsers(user.isSystemAdmin ? undefined : user.factoryId);
   
   // Get all active modules for permission mapping
   const modules = await query(

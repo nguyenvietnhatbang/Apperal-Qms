@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { AuditService } from "@/features/audit/services/audit-service";
 import { getCurrentUser } from "@/lib/auth-session";
 import { ApiResponse } from "@/lib/api-response";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Lỗi máy chủ khi chạy audit";
@@ -12,7 +13,7 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(_request: NextRequest, context: RouteContext) {
+export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const hasAccess = await PermissionService.hasPermission("payroll", "create");
     if (!hasAccess) {
@@ -23,8 +24,10 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
 
     const { id } = await context.params;
-    const attendance = await AuditService.generateAuditAttendance(id, currentUser.id, currentUser.factoryId);
-    const payroll = await AuditService.calculateAuditPayroll(id, currentUser.id, currentUser.factoryId);
+    const { searchParams } = new URL(request.url);
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
+    const attendance = await AuditService.generateAuditAttendance(id, currentUser.id, factoryId);
+    const payroll = await AuditService.calculateAuditPayroll(id, currentUser.id, factoryId);
 
     return ApiResponse.success({ attendance, payroll });
   } catch (error: unknown) {

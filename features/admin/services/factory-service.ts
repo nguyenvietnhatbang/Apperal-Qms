@@ -1,4 +1,4 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne, transaction } from "@/lib/db";
 
 export interface FactoryData {
   id?: string;
@@ -42,18 +42,72 @@ export class FactoryService {
   }
 
   static async createFactory(data: FactoryData, actorId: string) {
-    return await queryOne(
-      `INSERT INTO factories (code, name, description, is_active, created_by)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, code, name, description, is_active as "isActive"`,
-      [
-        data.code,
-        data.name,
-        data.description || null,
-        data.isActive !== undefined ? data.isActive : true,
-        actorId,
-      ]
-    );
+    return await transaction(async (client) => {
+      const factoryRes = await client.query(
+        `INSERT INTO factories (code, name, description, is_active, created_by)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, code, name, description, is_active as "isActive"`,
+        [
+          data.code,
+          data.name,
+          data.description || null,
+          data.isActive !== undefined ? data.isActive : true,
+          actorId,
+        ]
+      );
+      const factory = factoryRes.rows[0];
+
+      const adminDeptRes = await client.query(
+        `INSERT INTO departments (factory_id, code, name, description, is_admin, is_active)
+         VALUES ($1, 'admin', 'Admin', 'Phòng ban/quyền quản trị của xưởng.', true, true)
+         RETURNING id`,
+        [factory.id]
+      );
+      const adminDeptId = adminDeptRes.rows[0].id;
+
+      await client.query(
+        `INSERT INTO department_module_permissions (
+           department_id, module_id, can_view, can_create, can_update, can_delete, can_approve
+         )
+         SELECT $1, id, true, true, true, true, true
+         FROM modules
+         WHERE is_active = true
+         ON CONFLICT (department_id, module_id) DO UPDATE
+         SET can_view = true, can_create = true, can_update = true, can_delete = true, can_approve = true, updated_at = now()`,
+        [adminDeptId]
+      );
+
+      await client.query(
+        `INSERT INTO payroll_rules (factory_id, code, name, value, unit, description, is_active)
+         SELECT $1, code, name, value, unit, description, is_active
+         FROM payroll_rules
+         WHERE factory_id = (SELECT id FROM factories WHERE code = 'default')
+         ON CONFLICT (factory_id, code) DO NOTHING`,
+        [factory.id]
+      );
+
+      await client.query(
+        `INSERT INTO audit_configs (
+           factory_id, code, name, max_overtime_hours_per_day, max_overtime_hours_per_month,
+           max_overtime_hours_per_year, allow_sunday_work, enable_overtime_tier_2, note, is_active
+         )
+         SELECT $1, code, name, max_overtime_hours_per_day, max_overtime_hours_per_month,
+                max_overtime_hours_per_year, allow_sunday_work, enable_overtime_tier_2, note, is_active
+         FROM audit_configs
+         WHERE factory_id = (SELECT id FROM factories WHERE code = 'default')
+         ON CONFLICT (factory_id, code) DO NOTHING`,
+        [factory.id]
+      );
+
+      await client.query(
+        `INSERT INTO user_factory_memberships (user_id, factory_id, department_id, is_default, is_active)
+         VALUES ($1, $2, $3, false, true)
+         ON CONFLICT DO NOTHING`,
+        [actorId, factory.id, adminDeptId]
+      );
+
+      return factory;
+    });
   }
 
   static async updateFactory(id: string, data: FactoryData) {

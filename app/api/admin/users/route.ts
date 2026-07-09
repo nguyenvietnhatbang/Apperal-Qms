@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
 
     const { searchParams } = new URL(request.url);
-    const factoryId = resolveFactoryId(currentUser, searchParams.get("factoryId"));
+    const factoryId = currentUser.isSystemAdmin ? searchParams.get("factoryId") || undefined : currentUser.factoryId;
     const users = await UserService.getUsers(factoryId);
     return ApiResponse.success(users);
   } catch (error: any) {
@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { departmentId, username, displayName, email, password, status, isAdmin, factoryId: requestedFactoryId } = body;
+    const { departmentId, username, displayName, email, password, status, isAdmin, factoryId: requestedFactoryId, memberships } = body;
 
     if (!username || !displayName || !password) {
       return ApiResponse.badRequest("Mã đăng nhập, tên hiển thị và mật khẩu không được để trống.", "MISSING_FIELDS");
@@ -42,10 +42,19 @@ export async function POST(request: NextRequest) {
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
     const factoryId = resolveFactoryId(currentUser, requestedFactoryId);
+    const requestedMemberships = Array.isArray(memberships) ? memberships : undefined;
+    const normalizedMemberships = currentUser.isSystemAdmin
+      ? requestedMemberships
+      : requestedMemberships?.filter((membership: any) => membership.factoryId === factoryId);
+
+    if (!currentUser.isSystemAdmin && requestedMemberships?.length !== normalizedMemberships?.length) {
+      return ApiResponse.forbidden("Bạn không có quyền cấp người dùng sang xưởng khác.");
+    }
 
     const newUser = await UserService.createUser({
       factoryId,
       departmentId,
+      memberships: normalizedMemberships,
       username,
       displayName,
       email,

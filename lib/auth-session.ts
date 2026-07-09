@@ -134,23 +134,27 @@ export async function getCurrentUser(): Promise<UserSessionData | null> {
           approve: true,
         };
       }
-    } else if (user.dept_id) {
+    } else {
       // Get department permissions
       const deptPerms = await query(
         `SELECT m.code as module_code, p.can_view, p.can_create, p.can_update, p.can_delete, p.can_approve
          FROM department_module_permissions p
          JOIN modules m ON p.module_id = m.id
-         WHERE p.department_id = $1 AND m.is_active = true`,
-        [user.dept_id]
+         JOIN user_factory_memberships fm ON fm.department_id = p.department_id
+         WHERE fm.user_id = $1
+           AND fm.is_active = true
+           AND fm.deleted_at IS NULL
+           AND m.is_active = true`,
+        [user.id]
       );
       
       for (const p of deptPerms) {
         permissions[p.module_code] = {
-          view: !!p.can_view,
-          create: !!p.can_create,
-          update: !!p.can_update,
-          delete: !!p.can_delete,
-          approve: !!p.can_approve,
+          view: !!(permissions[p.module_code]?.view || p.can_view),
+          create: !!(permissions[p.module_code]?.create || p.can_create),
+          update: !!(permissions[p.module_code]?.update || p.can_update),
+          delete: !!(permissions[p.module_code]?.delete || p.can_delete),
+          approve: !!(permissions[p.module_code]?.approve || p.can_approve),
         };
       }
     }

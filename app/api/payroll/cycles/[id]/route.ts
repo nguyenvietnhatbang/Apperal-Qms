@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth-session";
 import { PayrollCycleService } from "@/features/payroll/services/payroll-cycle-service";
 import { ApiResponse } from "@/lib/api-response";
 import { query } from "@/lib/db";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -19,8 +20,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const { searchParams } = new URL(request.url);
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    const cycle = await PayrollCycleService.getCycleById(id, currentUser.factoryId);
+    const cycle = await PayrollCycleService.getCycleById(id, factoryId);
     
     if (!cycle) {
       return ApiResponse.notFound("Không tìm thấy chu kỳ lương.");
@@ -41,6 +44,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, body.factoryId);
 
     // If updating status, verify update/approve permission
     if (status) {
@@ -52,7 +56,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         return ApiResponse.forbidden(`Bạn không có quyền thực hiện thao tác này (yêu cầu quyền ${permissionRequired}).`);
       }
 
-      await PayrollCycleService.updateCycleStatus(id, status, currentUser.id, currentUser.factoryId, note);
+      await PayrollCycleService.updateCycleStatus(id, status, currentUser.id, factoryId, note);
     } else {
       // Just update note or standard details directly
       const hasAccess = await PermissionService.hasPermission("payroll", "update");
@@ -62,11 +66,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       
       await query(
         `UPDATE payroll_cycles SET note = $1, updated_at = now() WHERE id = $2 AND factory_id = $3`,
-        [note || null, id, currentUser.factoryId]
+        [note || null, id, factoryId]
       );
     }
 
-    const updatedCycle = await PayrollCycleService.getCycleById(id, currentUser.factoryId);
+    const updatedCycle = await PayrollCycleService.getCycleById(id, factoryId);
     return ApiResponse.success(updatedCycle);
   } catch (error: any) {
     console.error("Error in PUT cycle:", error);
@@ -84,8 +88,10 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const { id } = await context.params;
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const { searchParams } = new URL(request.url);
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    await PayrollCycleService.deleteCycle(id, currentUser.factoryId);
+    await PayrollCycleService.deleteCycle(id, factoryId);
     return ApiResponse.success({ message: "Xóa chu kỳ lương thành công." });
   } catch (error: any) {
     console.error("Error in DELETE cycle:", error);

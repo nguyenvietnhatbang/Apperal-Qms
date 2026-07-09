@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { SalaryConfigService } from "@/features/employees/services/salary-config-service";
 import { ApiResponse } from "@/lib/api-response";
 import { getCurrentUser } from "@/lib/auth-session";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, body.factoryId);
 
     const configs = await SalaryConfigService.createBulkSalaryConfigs({
       employeeIds,
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
       otherBonus,
       mealAllowance,
       note: note || null,
-    }, currentUser.factoryId);
+    }, factoryId);
 
     return ApiResponse.success({ updatedCount: configs.length, configs }, 201);
   } catch (error: unknown) {

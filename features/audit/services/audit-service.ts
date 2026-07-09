@@ -41,12 +41,13 @@ function mapAuditConfig(row: AuditConfigRow): AuditRuleConfig & {
 }
 
 export class AuditService {
-  static async getActiveConfig() {
+  static async getActiveConfig(factoryId: string) {
     const config = await queryOne<AuditConfigRow>(
       `SELECT id, code, name, max_overtime_hours_per_day, max_overtime_hours_per_month,
               max_overtime_hours_per_year, allow_sunday_work, enable_overtime_tier_2, note
        FROM audit_configs
-       WHERE code = 'default' AND is_active = true`
+       WHERE factory_id = $1 AND code = 'default' AND is_active = true`,
+      [factoryId]
     );
 
     if (!config) {
@@ -56,7 +57,7 @@ export class AuditService {
     return mapAuditConfig(config);
   }
 
-  static async updateActiveConfig(data: Partial<AuditRuleConfig> & { note?: string | null }) {
+  static async updateActiveConfig(factoryId: string, data: Partial<AuditRuleConfig> & { note?: string | null }) {
     const updated = await queryOne<AuditConfigRow>(
       `UPDATE audit_configs
        SET max_overtime_hours_per_day = COALESCE($1, max_overtime_hours_per_day),
@@ -66,7 +67,7 @@ export class AuditService {
            enable_overtime_tier_2 = COALESCE($5, enable_overtime_tier_2),
            note = COALESCE($6, note),
            updated_at = now()
-       WHERE code = 'default'
+       WHERE factory_id = $7 AND code = 'default'
        RETURNING id, code, name, max_overtime_hours_per_day, max_overtime_hours_per_month,
                  max_overtime_hours_per_year, allow_sunday_work, enable_overtime_tier_2, note`,
       [
@@ -76,6 +77,7 @@ export class AuditService {
         data.allowSundayWork ?? null,
         data.enableOvertimeTier2 ?? null,
         data.note ?? null,
+        factoryId,
       ]
     );
 
@@ -84,7 +86,7 @@ export class AuditService {
   }
 
   static async generateAuditAttendance(cycleId: string, actorId: string, factoryId: string) {
-    const config = await this.getActiveConfig();
+    const config = await this.getActiveConfig(factoryId);
 
     return await transaction(async (client) => {
       const cycleRes = await client.query(
@@ -283,7 +285,7 @@ export class AuditService {
   }
 
   static async calculateAuditPayroll(cycleId: string, actorId: string, factoryId: string) {
-    const config = await this.getActiveConfig();
+    const config = await this.getActiveConfig(factoryId);
 
     return await transaction(async (client) => {
       const cycleRes = await client.query(
@@ -303,7 +305,7 @@ export class AuditService {
         throw new Error("Chưa có bảng chấm công audit. Hãy chạy audit trước khi tính lương audit.");
       }
 
-      const rules = await PayrollRuleService.getRulesMap();
+      const rules = await PayrollRuleService.getRulesMap(cycle.factory_id);
       const stdWorkdays = toNumber(cycle.standard_workdays);
       const stdHoursPerDay = toNumber(cycle.standard_hours_per_day);
       const otNormalRate = rules["overtime_normal_rate"] || 1.5;

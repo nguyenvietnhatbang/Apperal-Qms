@@ -20,7 +20,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
     const { searchParams } = new URL(request.url);
-    const factoryId = resolveFactoryId(currentUser, searchParams.get("factoryId"));
+    const factoryId = currentUser.isSystemAdmin ? searchParams.get("factoryId") || undefined : currentUser.factoryId;
     const user = await UserService.getUserById(id, factoryId);
     
     if (!user) {
@@ -43,7 +43,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const { id } = await context.params;
     const body = await request.json();
-    const { departmentId, username, displayName, email, password, status, isAdmin, factoryId: requestedFactoryId } = body;
+    const { departmentId, username, displayName, email, password, status, isAdmin, factoryId: requestedFactoryId, memberships } = body;
 
     if (!username || !displayName) {
       return ApiResponse.badRequest("Mã đăng nhập và tên hiển thị không được để trống.", "MISSING_FIELDS");
@@ -52,10 +52,19 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
     const factoryId = resolveFactoryId(currentUser, requestedFactoryId);
+    const requestedMemberships = Array.isArray(memberships) ? memberships : undefined;
+    const normalizedMemberships = currentUser.isSystemAdmin
+      ? requestedMemberships
+      : requestedMemberships?.filter((membership: any) => membership.factoryId === factoryId);
+
+    if (!currentUser.isSystemAdmin && requestedMemberships?.length !== normalizedMemberships?.length) {
+      return ApiResponse.forbidden("Bạn không có quyền cấp người dùng sang xưởng khác.");
+    }
 
     const updatedUser = await UserService.updateUser(id, {
       factoryId,
       departmentId,
+      memberships: normalizedMemberships,
       username,
       displayName,
       email,
@@ -82,7 +91,7 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
     const { searchParams } = new URL(request.url);
-    const factoryId = resolveFactoryId(currentUser, searchParams.get("factoryId"));
+    const factoryId = currentUser.isSystemAdmin ? searchParams.get("factoryId") || undefined : currentUser.factoryId;
     await UserService.deleteUser(id, factoryId);
     return ApiResponse.success({ message: "Xóa người dùng thành công." });
   } catch (error: any) {

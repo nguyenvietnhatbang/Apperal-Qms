@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { FactoryService } from "@/features/admin/services/factory-service";
 import { getCurrentUser } from "@/lib/auth-session";
 import { ApiResponse } from "@/lib/api-response";
+import { assertFactoryAccess } from "@/lib/factory-scope";
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -21,9 +22,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
 
     const { id } = await context.params;
-    if (!currentUser.isSystemAdmin && currentUser.factoryId !== id) {
-      return ApiResponse.forbidden("Bạn không có quyền xem xưởng này.");
-    }
+    await assertFactoryAccess(currentUser, id);
 
     const factory = await FactoryService.getFactoryById(id);
     if (!factory) return ApiResponse.notFound("Không tìm thấy xưởng.");

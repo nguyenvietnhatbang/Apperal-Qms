@@ -4,20 +4,23 @@ export class PayrollRuleService {
   /**
    * Get all payroll rules
    */
-  static async getRules() {
+  static async getRules(factoryId: string) {
     return await query(
       `SELECT id, code, name, value, unit, description, is_active as "isActive", created_at as "createdAt", updated_at as "updatedAt"
        FROM payroll_rules
-       ORDER BY code ASC`
+       WHERE factory_id = $1
+       ORDER BY code ASC`,
+      [factoryId]
     );
   }
 
   /**
    * Get active rules as a key-value map for quick lookup
    */
-  static async getRulesMap(): Promise<Record<string, number>> {
+  static async getRulesMap(factoryId: string): Promise<Record<string, number>> {
     const rules = await query(
-      `SELECT code, value FROM payroll_rules WHERE is_active = true`
+      `SELECT code, value FROM payroll_rules WHERE factory_id = $1 AND is_active = true`,
+      [factoryId]
     );
     const map: Record<string, number> = {};
     rules.forEach((r) => {
@@ -29,13 +32,13 @@ export class PayrollRuleService {
   /**
    * Update rule value
    */
-  static async updateRule(id: string, value: number) {
+  static async updateRule(id: string, value: number, factoryId: string) {
     return await queryOne(
       `UPDATE payroll_rules
        SET value = $1, updated_at = now()
-       WHERE id = $2
+       WHERE id = $2 AND factory_id = $3
        RETURNING id, code, name, value, unit`,
-      [value, id]
+      [value, id, factoryId]
     );
   }
 }

@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { getCurrentUser } from "@/lib/auth-session";
 import { PayrollCycleService } from "@/features/payroll/services/payroll-cycle-service";
 import { ApiResponse } from "@/lib/api-response";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,8 +14,10 @@ export async function GET(request: NextRequest) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const { searchParams } = new URL(request.url);
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
-    const cycles = await PayrollCycleService.getCycles(currentUser.factoryId);
+    const cycles = await PayrollCycleService.getCycles(factoryId);
     return ApiResponse.success(cycles);
   } catch (error: any) {
     console.error("Error in GET cycles:", error);
@@ -33,6 +36,7 @@ export async function POST(request: NextRequest) {
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
 
     const body = await request.json();
+    const factoryId = await resolveAccessibleFactoryId(currentUser, body.factoryId);
     const { code, name, periodStart, periodEnd, standardWorkdays, standardHoursPerDay, note } = body;
 
     if (!code || !name || !periodStart || !periodEnd) {
@@ -47,7 +51,7 @@ export async function POST(request: NextRequest) {
       standardWorkdays: standardWorkdays !== undefined ? Number(standardWorkdays) : undefined,
       standardHoursPerDay: standardHoursPerDay !== undefined ? Number(standardHoursPerDay) : undefined,
       note,
-    }, currentUser.id, currentUser.factoryId);
+    }, currentUser.id, factoryId);
 
     return ApiResponse.success(newCycle, 201);
   } catch (error: any) {

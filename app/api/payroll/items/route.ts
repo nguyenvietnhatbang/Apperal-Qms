@@ -3,6 +3,7 @@ import { PermissionService } from "@/features/auth/services/permission-service";
 import { PayrollSlipService } from "@/features/payroll/services/payroll-slip-service";
 import { ApiResponse } from "@/lib/api-response";
 import { getCurrentUser } from "@/lib/auth-session";
+import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,17 +23,18 @@ export async function GET(request: NextRequest) {
 
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
     if (employeeId) {
       // Get detailed payslip
-      const payslip = await PayrollSlipService.getPayslip(cycleId, employeeId, currentUser.factoryId);
+      const payslip = await PayrollSlipService.getPayslip(cycleId, employeeId, factoryId);
       if (!payslip) {
         return ApiResponse.notFound("Không tìm thấy phiếu lương.");
       }
       return ApiResponse.success(payslip);
     } else {
       // Get compiled payroll sheet
-      const payrollItems = await PayrollSlipService.getPayrollItems(cycleId, currentUser.factoryId, search);
+      const payrollItems = await PayrollSlipService.getPayrollItems(cycleId, factoryId, search);
       return ApiResponse.success(payrollItems);
     }
   } catch (error: any) {
