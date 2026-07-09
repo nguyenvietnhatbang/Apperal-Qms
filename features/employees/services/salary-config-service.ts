@@ -25,19 +25,35 @@ export interface BulkSalaryConfigData extends Omit<SalaryConfigData, "employeeId
   employeeIds: string[];
 }
 
+const salaryConfigSelectFields = `id, employee_id as "employeeId", effective_from as "effectiveFrom", effective_to as "effectiveTo",
+  total_salary as "totalSalary", insurance_salary as "insuranceSalary", base_salary as "baseSalary",
+  position_allowance as "positionAllowance", responsibility_allowance as "responsibilityAllowance",
+  seniority_allowance as "seniorityAllowance", safety_allowance as "safetyAllowance",
+  phone_allowance as "phoneAllowance", travel_allowance as "travelAllowance",
+  housing_allowance as "housingAllowance", attendance_bonus as "attendanceBonus",
+  other_bonus as "otherBonus", meal_allowance as "mealAllowance", note`;
+
+function calculateTotalSalary(data: SalaryConfigData | BulkSalaryConfigData) {
+  return Number(data.baseSalary) +
+    Number(data.positionAllowance || 0) +
+    Number(data.responsibilityAllowance || 0) +
+    Number(data.seniorityAllowance || 0) +
+    Number(data.safetyAllowance || 0) +
+    Number(data.phoneAllowance || 0) +
+    Number(data.travelAllowance || 0) +
+    Number(data.housingAllowance || 0) +
+    Number(data.attendanceBonus || 0) +
+    Number(data.otherBonus || 0) +
+    Number(data.mealAllowance || 0);
+}
+
 export class SalaryConfigService {
   /**
    * Get all salary configurations for an employee
    */
   static async getConfigsByEmployeeId(employeeId: string) {
     return await query(
-      `SELECT id, employee_id as "employeeId", effective_from as "effectiveFrom", effective_to as "effectiveTo", 
-              total_salary as "totalSalary", insurance_salary as "insuranceSalary", base_salary as "baseSalary", 
-              position_allowance as "positionAllowance", responsibility_allowance as "responsibilityAllowance", 
-              seniority_allowance as "seniorityAllowance", safety_allowance as "safetyAllowance", 
-              phone_allowance as "phoneAllowance", travel_allowance as "travelAllowance", 
-              housing_allowance as "housingAllowance", attendance_bonus as "attendanceBonus", 
-              other_bonus as "otherBonus", meal_allowance as "mealAllowance", note
+      `SELECT ${salaryConfigSelectFields}
        FROM employee_salary_configs
        WHERE employee_id = $1
        ORDER BY effective_from DESC`,
@@ -50,13 +66,7 @@ export class SalaryConfigService {
    */
   static async getActiveConfig(employeeId: string, dateStr: string) {
     return await queryOne(
-      `SELECT id, employee_id as "employeeId", effective_from as "effectiveFrom", effective_to as "effectiveTo", 
-              total_salary as "totalSalary", insurance_salary as "insuranceSalary", base_salary as "baseSalary", 
-              position_allowance as "positionAllowance", responsibility_allowance as "responsibilityAllowance", 
-              seniority_allowance as "seniorityAllowance", safety_allowance as "safetyAllowance", 
-              phone_allowance as "phoneAllowance", travel_allowance as "travelAllowance", 
-              housing_allowance as "housingAllowance", attendance_bonus as "attendanceBonus", 
-              other_bonus as "otherBonus", meal_allowance as "mealAllowance", note
+      `SELECT ${salaryConfigSelectFields}
        FROM employee_salary_configs
        WHERE employee_id = $1 
          AND effective_from <= $2 
@@ -71,36 +81,95 @@ export class SalaryConfigService {
    * Create new salary configuration. Auto-close the previous open configuration if any.
    */
   static async createSalaryConfig(data: SalaryConfigData) {
-    const total = Number(data.baseSalary) + 
-      Number(data.positionAllowance || 0) + 
-      Number(data.responsibilityAllowance || 0) + 
-      Number(data.seniorityAllowance || 0) + 
-      Number(data.safetyAllowance || 0) + 
-      Number(data.phoneAllowance || 0) + 
-      Number(data.travelAllowance || 0) + 
-      Number(data.housingAllowance || 0) + 
-      Number(data.attendanceBonus || 0) + 
-      Number(data.otherBonus || 0) + 
-      Number(data.mealAllowance || 0);
+    const total = calculateTotalSalary(data);
 
-    // Auto-update previous config's effective_to if it's currently open
-    await query(
-      `UPDATE employee_salary_configs
-       SET effective_to = $1 - INTERVAL '1 day'
-       WHERE employee_id = $2 AND effective_to IS NULL AND effective_from < $1`,
-      [data.effectiveFrom, data.employeeId]
-    );
+    return await transaction(async (client) => {
+      const currentOpenConfig = await client.query(
+        `SELECT id
+         FROM employee_salary_configs
+         WHERE employee_id = $1
+           AND effective_to IS NULL
+           AND effective_from >= $2::date
+         LIMIT 1`,
+        [data.employeeId, data.effectiveFrom]
+      );
+
+      if (currentOpenConfig.rowCount > 0) {
+        throw new Error("Ngày hiệu lực của bản ghi lương mới phải sau ngày hiệu lực của bản ghi hiện tại.");
+      }
+
+      await client.query(
+        `UPDATE employee_salary_configs
+         SET effective_to = $1::date - INTERVAL '1 day',
+             updated_at = now()
+         WHERE employee_id = $2
+           AND effective_to IS NULL
+           AND effective_from < $1::date`,
+        [data.effectiveFrom, data.employeeId]
+      );
+
+      const result = await client.query(
+        `INSERT INTO employee_salary_configs (
+           employee_id, effective_from, effective_to, total_salary, insurance_salary, base_salary,
+           position_allowance, responsibility_allowance, seniority_allowance, safety_allowance,
+           phone_allowance, travel_allowance, housing_allowance, attendance_bonus, other_bonus, meal_allowance, note
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         RETURNING ${salaryConfigSelectFields}`,
+        [
+          data.employeeId,
+          data.effectiveFrom,
+          data.effectiveTo || null,
+          total,
+          data.insuranceSalary,
+          data.baseSalary,
+          data.positionAllowance || 0,
+          data.responsibilityAllowance || 0,
+          data.seniorityAllowance || 0,
+          data.safetyAllowance || 0,
+          data.phoneAllowance || 0,
+          data.travelAllowance || 0,
+          data.housingAllowance || 0,
+          data.attendanceBonus || 0,
+          data.otherBonus || 0,
+          data.mealAllowance || 0,
+          data.note || null,
+        ]
+      );
+
+      return result.rows[0] || null;
+    });
+  }
+
+  /**
+   * Update an existing salary configuration without creating a new history row.
+   */
+  static async updateSalaryConfig(configId: string, data: SalaryConfigData) {
+    const total = calculateTotalSalary(data);
 
     return await queryOne(
-      `INSERT INTO employee_salary_configs (
-         employee_id, effective_from, effective_to, total_salary, insurance_salary, base_salary, 
-         position_allowance, responsibility_allowance, seniority_allowance, safety_allowance, 
-         phone_allowance, travel_allowance, housing_allowance, attendance_bonus, other_bonus, meal_allowance, note
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-       RETURNING id, employee_id as "employeeId", effective_from as "effectiveFrom", effective_to as "effectiveTo", 
-                 total_salary as "totalSalary", insurance_salary as "insuranceSalary", base_salary as "baseSalary"`,
+      `UPDATE employee_salary_configs
+       SET effective_from = $3,
+           effective_to = $4,
+           total_salary = $5,
+           insurance_salary = $6,
+           base_salary = $7,
+           position_allowance = $8,
+           responsibility_allowance = $9,
+           seniority_allowance = $10,
+           safety_allowance = $11,
+           phone_allowance = $12,
+           travel_allowance = $13,
+           housing_allowance = $14,
+           attendance_bonus = $15,
+           other_bonus = $16,
+           meal_allowance = $17,
+           note = $18,
+           updated_at = now()
+       WHERE id = $1 AND employee_id = $2 AND effective_to IS NULL
+       RETURNING ${salaryConfigSelectFields}`,
       [
+        configId,
         data.employeeId,
         data.effectiveFrom,
         data.effectiveTo || null,
@@ -127,17 +196,7 @@ export class SalaryConfigService {
    */
   static async createBulkSalaryConfigs(data: BulkSalaryConfigData) {
     const employeeIds = Array.from(new Set(data.employeeIds));
-    const total = Number(data.baseSalary) +
-      Number(data.positionAllowance || 0) +
-      Number(data.responsibilityAllowance || 0) +
-      Number(data.seniorityAllowance || 0) +
-      Number(data.safetyAllowance || 0) +
-      Number(data.phoneAllowance || 0) +
-      Number(data.travelAllowance || 0) +
-      Number(data.housingAllowance || 0) +
-      Number(data.attendanceBonus || 0) +
-      Number(data.otherBonus || 0) +
-      Number(data.mealAllowance || 0);
+    const total = calculateTotalSalary(data);
 
     return await transaction(async (client) => {
       const existingEmployees = await client.query(

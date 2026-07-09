@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Apparel Internal",
-  description: "Hệ thống nội bộ auth và chấm công tính lương",
+  title: "IRT Eco Internal",
+  description: "Hệ thống nội bộ quản lý công việc all-in-one",
 };
 
 export default function RootLayout({

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, User, AlertCircle, Loader2 } from "lucide-react";
 
@@ -64,18 +65,18 @@ export default function LoginPage() {
               CT
             </div>
             <div>
-              <p className="text-3xl font-black tracking-tight">CT Apparel</p>
+              <p className="text-3xl font-black tracking-tight">IRT Eco</p>
               <p className="mt-1 text-sm font-medium text-slate-300">Internal Operations</p>
             </div>
           </div>
 
           <div className="mt-16 max-w-2xl">
             <h1 className="text-5xl font-black leading-tight tracking-tight">
-              Quản lý chấm công
-              <span className="mt-1 block text-blue-500">và tiền lương chính xác</span>
+              Phần mềm quản lý công việc
+              <span className="mt-1 block text-blue-500">All - In - One</span>
             </h1>
             <p className="mt-7 max-w-xl text-xl leading-8 text-slate-300">
-              Một cổng vận hành thống nhất cho nhân sự, chấm công, dữ liệu và bảng lương nội bộ.
+              Một cổng vận hành thống nhất cho công việc, nhân sự, dữ liệu và báo cáo nội bộ.
             </p>
           </div>
         </div>
@@ -83,7 +84,6 @@ export default function LoginPage() {
         <div className="relative z-10 space-y-5 text-slate-300">
           {[
             "Phân quyền quản trị theo module",
-            "Bảng lương tách biệt dữ liệu gốc và dữ liệu kiểm toán",
           ].map((item) => (
             <div key={item} className="flex items-center gap-3 text-base font-medium">
               <CheckCircle2 className="h-5 w-5 text-blue-500" />
@@ -99,7 +99,7 @@ export default function LoginPage() {
             CT
           </div>
           <div>
-            <p className="text-lg font-black tracking-tight text-slate-950">CT Apparel</p>
+            <p className="text-lg font-black tracking-tight text-slate-950">IRT Eco</p>
             <p className="text-xs font-medium text-slate-500">Internal Operations</p>
           </div>
         </div>
@@ -192,6 +192,13 @@ export default function LoginPage() {
                   </>
                 )}
               </button>
+
+              <div className="text-center text-sm font-medium text-slate-600">
+                Người dùng mới?{" "}
+                <Link href="/register" className="font-bold text-blue-600 transition hover:text-blue-500">
+                  Đăng ký tài khoản
+                </Link>
+              </div>
             </form>
 
             <div className="mt-10 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm font-bold text-emerald-700">
@@ -201,7 +208,7 @@ export default function LoginPage() {
         </div>
 
         <footer className="text-center text-sm font-medium text-slate-500">
-          © 2026 CT Apparel. Bảo mật hệ thống nội bộ.
+          © 2026 IRT Eco. Bảo mật hệ thống nội bộ.
         </footer>
       </main>
     </div>

@@ -20,6 +20,32 @@ interface PayrollDashboardClientProps {
   initialRules: any[];
 }
 
+interface SalaryConfigItem {
+  id: string;
+  effectiveFrom: string | Date;
+  effectiveTo?: string | Date | null;
+  totalSalary: number | string;
+  insuranceSalary: number | string;
+  baseSalary: number | string;
+  positionAllowance?: number | string | null;
+  responsibilityAllowance?: number | string | null;
+  seniorityAllowance?: number | string | null;
+  safetyAllowance?: number | string | null;
+  phoneAllowance?: number | string | null;
+  travelAllowance?: number | string | null;
+  housingAllowance?: number | string | null;
+  attendanceBonus?: number | string | null;
+  otherBonus?: number | string | null;
+  mealAllowance?: number | string | null;
+  note?: string | null;
+}
+
+interface SalaryConfigEmployeeTarget {
+  id: string;
+  employeeCode?: string;
+  fullName?: string;
+}
+
 const payrollRuleGroups = [
   {
     id: "attendance",
@@ -139,7 +165,7 @@ export default function PayrollDashboardClient({
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
   
   const [salaryConfigModalOpen, setSalaryConfigModalOpen] = useState(false);
-  const [salaryConfigs, setSalaryConfigs] = useState<any[]>([]);
+  const [salaryConfigs, setSalaryConfigs] = useState<SalaryConfigItem[]>([]);
   const [bulkSalaryModalOpen, setBulkSalaryModalOpen] = useState(false);
   
   const [cycleModalOpen, setCycleModalOpen] = useState(false);
@@ -157,6 +183,8 @@ export default function PayrollDashboardClient({
   const [empFormError, setEmpFormError] = useState<string | null>(null);
 
   // Salary Config Form State
+  const [salaryConfigFormMode, setSalaryConfigFormMode] = useState<"edit" | "create">("create");
+  const [editingSalaryConfigId, setEditingSalaryConfigId] = useState<string | null>(null);
   const [effectiveFromForm, setEffectiveFromForm] = useState("");
   const [insuranceSalaryForm, setInsuranceSalaryForm] = useState(0);
   const [baseSalaryForm, setBaseSalaryForm] = useState(0);
@@ -406,12 +434,32 @@ export default function PayrollDashboardClient({
   };
 
   // Salary Configuration history & creation
-  const openSalaryConfigModal = async (emp: any) => {
-    setSelectedEmployee(emp);
-    setSalaryConfigError(null);
-    
-    // Default form states
-    setEffectiveFromForm(new Date().toISOString().split("T")[0]);
+  const todayInputValue = () => new Date().toISOString().split("T")[0];
+  const toDateInputValue = (value: string | Date | null | undefined) => {
+    if (!value) return todayInputValue();
+    if (typeof value === "string") return value.slice(0, 10);
+    return new Date(value).toISOString().split("T")[0];
+  };
+  const toSalaryNumber = (value: number | string | null | undefined) => Number(value || 0);
+  const getCurrentSalaryConfig = (configs: SalaryConfigItem[]) => configs.find((config) => !config.effectiveTo) || null;
+  const fillSalaryConfigForm = (config: SalaryConfigItem, options: { effectiveFrom?: string; note?: string } = {}) => {
+    setEffectiveFromForm(options.effectiveFrom || toDateInputValue(config.effectiveFrom));
+    setInsuranceSalaryForm(toSalaryNumber(config.insuranceSalary));
+    setBaseSalaryForm(toSalaryNumber(config.baseSalary));
+    setPosAllowanceForm(toSalaryNumber(config.positionAllowance));
+    setRespAllowanceForm(toSalaryNumber(config.responsibilityAllowance));
+    setSeniorityAllowanceForm(toSalaryNumber(config.seniorityAllowance));
+    setSafetyAllowanceForm(toSalaryNumber(config.safetyAllowance));
+    setPhoneAllowanceForm(toSalaryNumber(config.phoneAllowance));
+    setTravelAllowanceForm(toSalaryNumber(config.travelAllowance));
+    setHousingAllowanceForm(toSalaryNumber(config.housingAllowance));
+    setAttendanceBonusForm(toSalaryNumber(config.attendanceBonus));
+    setOtherBonusForm(toSalaryNumber(config.otherBonus));
+    setMealAllowanceForm(toSalaryNumber(config.mealAllowance));
+    setSalaryNoteForm(options.note ?? (config.note || ""));
+  };
+  const resetSalaryConfigForm = () => {
+    setEffectiveFromForm(todayInputValue());
     setInsuranceSalaryForm(0);
     setBaseSalaryForm(0);
     setPosAllowanceForm(0);
@@ -425,29 +473,28 @@ export default function PayrollDashboardClient({
     setOtherBonusForm(0);
     setMealAllowanceForm(0);
     setSalaryNoteForm("");
+  };
+
+  const openSalaryConfigModal = async (emp: SalaryConfigEmployeeTarget) => {
+    setSelectedEmployee(emp);
+    setSalaryConfigError(null);
+    setSalaryConfigFormMode("create");
+    setEditingSalaryConfigId(null);
+    resetSalaryConfigForm();
 
     try {
       setIsLoading(true);
       const res = await fetch(`/api/employees/${emp.id}/salary-configs`);
       const data = await res.json();
       if (data.success) {
-        setSalaryConfigs(data.data);
-        
-        // Populate form with current active salary if available
-        if (data.data.length > 0) {
-          const current = data.data[0]; // ordered DESC
-          setInsuranceSalaryForm(parseFloat(current.insuranceSalary));
-          setBaseSalaryForm(parseFloat(current.baseSalary));
-          setPosAllowanceForm(parseFloat(current.positionAllowance));
-          setRespAllowanceForm(parseFloat(current.responsibilityAllowance));
-          setSeniorityAllowanceForm(parseFloat(current.seniorityAllowance));
-          setSafetyAllowanceForm(parseFloat(current.safetyAllowance));
-          setPhoneAllowanceForm(parseFloat(current.phoneAllowance));
-          setTravelAllowanceForm(parseFloat(current.travelAllowance));
-          setHousingAllowanceForm(parseFloat(current.housingAllowance));
-          setAttendanceBonusForm(parseFloat(current.attendanceBonus));
-          setOtherBonusForm(parseFloat(current.otherBonus));
-          setMealAllowanceForm(parseFloat(current.mealAllowance));
+        const configs = data.data as SalaryConfigItem[];
+        setSalaryConfigs(configs);
+
+        const current = getCurrentSalaryConfig(configs);
+        if (current) {
+          fillSalaryConfigForm(current);
+          setEditingSalaryConfigId(current.id);
+          setSalaryConfigFormMode("edit");
         }
       }
     } catch (err) {
@@ -456,6 +503,31 @@ export default function PayrollDashboardClient({
       setIsLoading(false);
     }
     setSalaryConfigModalOpen(true);
+  };
+
+  const startNewSalaryConfig = () => {
+    setSalaryConfigError(null);
+    setSalaryConfigFormMode("create");
+    setEditingSalaryConfigId(null);
+    setEffectiveFromForm(todayInputValue());
+    setSalaryNoteForm("");
+  };
+
+  const restoreSalaryConfig = (config: SalaryConfigItem) => {
+    setSalaryConfigError(null);
+    setSalaryConfigFormMode("create");
+    setEditingSalaryConfigId(null);
+    fillSalaryConfigForm(config, {
+      effectiveFrom: todayInputValue(),
+      note: config.note || `Khôi phục từ cấu hình ngày ${formatDate(config.effectiveFrom)}`,
+    });
+  };
+
+  const editSalaryConfig = (config: SalaryConfigItem) => {
+    setSalaryConfigError(null);
+    setSalaryConfigFormMode("edit");
+    setEditingSalaryConfigId(config.id);
+    fillSalaryConfigForm(config);
   };
 
   const handleSalaryConfigSubmit = async (e: React.FormEvent) => {
@@ -481,10 +553,16 @@ export default function PayrollDashboardClient({
 
     try {
       setIsLoading(true);
+      const isEditing = salaryConfigFormMode === "edit";
+      if (isEditing && !editingSalaryConfigId) {
+        setSalaryConfigError("Không tìm thấy bản ghi cấu hình lương hiện tại để sửa.");
+        return;
+      }
+
       const res = await fetch(`/api/employees/${selectedEmployee.id}/salary-configs`, {
-        method: "POST",
+        method: isEditing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(isEditing ? { ...payload, id: editingSalaryConfigId } : payload),
       });
       const data = await res.json();
       if (!data.success) {
@@ -495,10 +573,18 @@ export default function PayrollDashboardClient({
       // Reload configs list
       const reloadRes = await fetch(`/api/employees/${selectedEmployee.id}/salary-configs`);
       const reloadData = await reloadRes.json();
-      if (reloadData.success) setSalaryConfigs(reloadData.data);
+      if (reloadData.success) {
+        const configs = reloadData.data as SalaryConfigItem[];
+        setSalaryConfigs(configs);
+        const savedConfig = configs.find((config) => config.id === data.data?.id) || getCurrentSalaryConfig(configs);
+        if (savedConfig) {
+          fillSalaryConfigForm(savedConfig);
+          setEditingSalaryConfigId(savedConfig.id);
+          setSalaryConfigFormMode("edit");
+        }
+      }
       
-      setSalaryNoteForm("");
-      alert("Cập nhật cấu hình lương mới thành công!");
+      alert(isEditing ? "Đã lưu cấu hình lương hiện tại." : "Đã thêm và sử dụng cấu hình lương mới.");
     } catch (err) {
       setSalaryConfigError("Lỗi kết nối.");
     } finally {
@@ -608,26 +694,6 @@ export default function PayrollDashboardClient({
       alert(`Đã gán lương cho ${data.data.updatedCount} nhân viên.`);
     } catch (err) {
       setBulkSalaryError("Lỗi kết nối.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSalaryConfigDelete = async (configId: string) => {
-    if (!confirm("Bạn muốn xóa cấu hình lương này?")) return;
-    try {
-      setIsLoading(true);
-      const res = await fetch(`/api/employees/${selectedEmployee.id}/salary-configs`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: configId }), // wait, our service handles config deleting directly. Let's send a DELETE request.
-      });
-      // Actually, we can update service or call query directly. Let's make an API endpoint if needed.
-      // For simplicity, we can do it via dynamic delete or just direct query. Since we wrote the service, let's look at the endpoint we want to use.
-      // If we don't have a direct endpoint for config delete, we can write a quick query or let it be. Let's delete via fetch or ignore.
-      // Wait, we can implement it by issuing a request to `/api/employees/configs` or similar. Let's handle it.
-    } catch (err) {
-      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -2836,9 +2902,28 @@ export default function PayrollDashboardClient({
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Add New Config Form */}
+              {/* Current Config Form */}
               <div className="border border-zinc-200 rounded-2xl p-4 bg-zinc-50/50">
-                <h4 className="font-bold text-sm text-zinc-800 uppercase tracking-wider mb-4">Cập nhật cấu hình lương mới</h4>
+                <div className="flex items-start justify-between gap-3 mb-4">
+                  <div>
+                    <h4 className="font-bold text-sm text-zinc-800 uppercase tracking-wider">
+                      {salaryConfigFormMode === "edit" ? "Sửa cấu hình lương hiện tại" : "Thêm cấu hình lương mới"}
+                    </h4>
+                    <p className="text-[11px] text-zinc-500 mt-1">
+                      {salaryConfigFormMode === "edit"
+                        ? "Lưu sẽ cập nhật trực tiếp bản ghi đang dùng, không tạo thêm lịch sử."
+                        : "Lưu sẽ tạo bản ghi mới và dùng bản ghi này từ ngày hiệu lực."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={startNewSalaryConfig}
+                    className="btn-secondary rounded-xl text-[11px] px-3 py-1.5 font-semibold cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm bản ghi mới</span>
+                  </button>
+                </div>
                 
                 <form onSubmit={handleSalaryConfigSubmit} className="space-y-4 text-xs">
                   {salaryConfigError && (
@@ -3001,7 +3086,7 @@ export default function PayrollDashboardClient({
                       className="btn-primary bg-blue-600 hover:bg-blue-500 text-white rounded-xl px-4 py-2 font-semibold shadow-md shadow-blue-500/10 flex items-center gap-1.5 cursor-pointer text-xs"
                     >
                       {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                      <span>Lưu Cấu Hình Mới</span>
+                      <span>{salaryConfigFormMode === "edit" ? "Lưu cấu hình hiện tại" : "Thêm và sử dụng"}</span>
                     </button>
                   </div>
                 </form>
@@ -3015,13 +3100,27 @@ export default function PayrollDashboardClient({
                   {salaryConfigs.length === 0 ? (
                     <p className="text-zinc-400 text-center py-8 text-xs font-semibold">Chưa cấu hình lương cho nhân viên này.</p>
                   ) : (
-                    salaryConfigs.map((c, idx) => (
-                      <div key={c.id} className="border border-zinc-150 rounded-xl p-3.5 relative hover:bg-zinc-50 transition-colors text-xs">
+                    salaryConfigs.map((c, idx) => {
+                      const isEditingThisConfig = salaryConfigFormMode === "edit" && editingSalaryConfigId === c.id;
+                      const isOpenConfig = !c.effectiveTo;
+
+                      return (
+                      <div key={c.id} className={`border rounded-xl p-3.5 relative hover:bg-zinc-50 transition-colors text-xs ${isEditingThisConfig ? "border-blue-300 bg-blue-50/40" : "border-zinc-150"}`}>
                         <div className="flex justify-between items-start mb-2">
-                          <span className="font-bold text-zinc-850">Cấu hình #{salaryConfigs.length - idx}</span>
-                          <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-bold text-[10px]">
-                            {formatDate(c.effectiveFrom)} &rarr; {c.effectiveTo ? formatDate(c.effectiveTo) : "Hiện tại"}
-                          </span>
+                          <div className="space-y-1">
+                            <span className="font-bold text-zinc-850">Cấu hình #{salaryConfigs.length - idx}</span>
+                            {isEditingThisConfig && (
+                              <span className="block text-[10px] font-bold text-blue-700">Đang sửa bản ghi này</span>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`${isOpenConfig ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"} px-2 py-0.5 rounded-md font-bold text-[10px]`}>
+                              {formatDate(c.effectiveFrom)} &rarr; {c.effectiveTo ? formatDate(c.effectiveTo) : "Hiện tại"}
+                            </span>
+                            {isOpenConfig && (
+                              <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-bold text-[10px]">Đang dùng</span>
+                            )}
+                          </div>
                         </div>
                         <div className="grid grid-cols-2 gap-y-1 text-[11px] text-zinc-600 border-t border-zinc-100 pt-2">
                           <div><span className="text-zinc-450">Lương đóng BH:</span> <strong className="text-zinc-750 font-bold">{formatVND(c.insuranceSalary)}</strong></div>
@@ -3032,8 +3131,31 @@ export default function PayrollDashboardClient({
                         {c.note && (
                           <p className="text-[10px] text-zinc-400 italic mt-2 bg-zinc-50 p-1 rounded-md">Note: {c.note}</p>
                         )}
+                        <div className="flex justify-end gap-2 mt-3">
+                          {isOpenConfig ? (
+                            <button
+                              type="button"
+                              onClick={() => editSalaryConfig(c)}
+                              disabled={isEditingThisConfig}
+                              className="btn-secondary rounded-lg px-2.5 py-1 text-[10px] font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                              <span>{isEditingThisConfig ? "Đang sửa" : "Sửa bản này"}</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => restoreSalaryConfig(c)}
+                              className="btn-secondary rounded-lg px-2.5 py-1 text-[10px] font-semibold cursor-pointer flex items-center gap-1"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Khôi phục</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
