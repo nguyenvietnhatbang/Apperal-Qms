@@ -373,14 +373,23 @@ export default function PayrollDashboardClient({
         await loadAttendanceRecords();
         await loadPayrollAdjustments();
         await loadPayrollSheet();
-        await loadAuditAttendanceRecords();
-        await loadAuditPayrollSheet();
       }
     } catch (error) {
       console.error(error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const refreshCalculatedPayroll = async (cycleId: string) => {
+    const [cyclesResponse, sheetResponse] = await Promise.all([
+      fetch(withFactory("/api/payroll/cycles")),
+      fetch(withFactory(`/api/payroll/items?cycleId=${cycleId}`)),
+    ]);
+    const [cyclesData, sheetData] = await Promise.all([cyclesResponse.json(), sheetResponse.json()]);
+
+    if (cyclesData.success) setCycles(cyclesData.data);
+    if (sheetData.success) setPayrollSheetItems(sheetData.data);
   };
 
   // Employees CRUD
@@ -797,9 +806,9 @@ export default function PayrollDashboardClient({
         alert(data.error?.message || "Lỗi tính lương");
         return;
       }
-      alert("Tính lương hoàn tất!");
-      await refreshAllData();
+      await refreshCalculatedPayroll(cycleId);
       setActiveTab("sheet");
+      alert("Tính lương hoàn tất!");
     } catch (err) {
       console.error(err);
     } finally {
