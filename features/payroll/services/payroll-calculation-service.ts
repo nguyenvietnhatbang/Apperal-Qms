@@ -155,7 +155,8 @@ export class PayrollCalculationService {
                     union_fee_amount_override as "unionFeeAmountOverride",
                     personal_income_tax_amount_override as "personalIncomeTaxAmountOverride",
                     menstrual_allowance_amount_override as "menstrualAllowanceAmountOverride",
-                    child_allowance_amount_override as "childAllowanceAmountOverride"
+                    child_allowance_amount_override as "childAllowanceAmountOverride",
+                    payroll_excluded as "payrollExcluded"
              FROM payroll_adjustments
              WHERE payroll_cycle_id = $1 AND employee_id = ANY($2::uuid[])`,
             [cycleId, employeeIds]
@@ -177,10 +178,18 @@ export class PayrollCalculationService {
           continue;
         }
 
-        const attendanceTotals = attendanceTotalsByEmployeeId.get(emp.id);
-        if (!attendanceTotals) continue;
-
         const adjustment = adjustmentsByEmployeeId.get(emp.id) || {};
+        const payrollExcluded = adjustment.payrollExcluded === true;
+        const attendanceTotals = attendanceTotalsByEmployeeId.get(emp.id) || {
+          actualWorkdays: 0,
+          paidLeaveDays: 0,
+          holidayDays: 0,
+          unpaidLeaveDays: 0,
+          overtimeNormalHours: 0,
+          overtimeSundayHours: 0,
+          overtimeHolidayHours: 0,
+        };
+        if (!attendanceTotalsByEmployeeId.has(emp.id) && !adjustmentsByEmployeeId.has(emp.id)) continue;
         const actualWorkdays = adjustment.actualWorkdaysOverride === null || adjustment.actualWorkdaysOverride === undefined
           ? parseFloat(attendanceTotals?.actualWorkdays || 0)
           : parseFloat(adjustment.actualWorkdaysOverride);
@@ -235,12 +244,14 @@ export class PayrollCalculationService {
         const dailyLeaveRate = leaveBase / stdWorkdays;
 
         // Earnings
-        const monthlySalaryAmount = Math.round(dailyRate * actualWorkdays);
-        const paidLeaveAmount = Math.round(dailyLeaveRate * (paidLeaveDays + holidayDays));
+        // The source sheet rounds the monthly work and leave components to
+        // thousand VND before composing total income.
+        const monthlySalaryAmount = payrollExcluded ? 0 : Math.round((dailyRate * actualWorkdays) / 1000) * 1000;
+        const paidLeaveAmount = payrollExcluded ? 0 : Math.round((dailyLeaveRate * (paidLeaveDays + holidayDays)) / 1000) * 1000;
         
-        const overtimeNormalAmount = Math.round(overtimeNormalHours * hourlyBase * otNormalRate);
-        const overtimeSundayAmount = Math.round(overtimeSundayHours * hourlyBase * otSundayRate);
-        const overtimeHolidayAmount = Math.round(overtimeHolidayHours * hourlyBase * otHolidayRate);
+        const overtimeNormalAmount = payrollExcluded ? 0 : Math.round(overtimeNormalHours * hourlyBase * otNormalRate);
+        const overtimeSundayAmount = payrollExcluded ? 0 : Math.round(overtimeSundayHours * hourlyBase * otSundayRate);
+        const overtimeHolidayAmount = payrollExcluded ? 0 : Math.round(overtimeHolidayHours * hourlyBase * otHolidayRate);
 
         // Allowances & bonuses
         const seniorityAllowance = parseFloat(salaryConfig.seniorityAllowance || 0);
@@ -275,19 +286,22 @@ export class PayrollCalculationService {
 
         // Total allowances flat (excluding pro-rated allowances which are built into total_salary)
         // Seniority allowance is paid flat on top as observed in the template sheet
-        const flatAllowanceAmount = seniorityAllowance + menstrualAllowance + childAllowance +
+        const flatAllowanceAmount = payrollExcluded ? 0 : seniorityAllowance + menstrualAllowance + childAllowance +
           businessTripAllowance + complianceBonus + workTripSupport + nightShiftAmount;
 
-        // Gross Income
-        const grossIncome = monthlySalaryAmount + paidLeaveAmount + 
-          overtimeNormalAmount + overtimeSundayAmount + overtimeHolidayAmount + personalLeaveAmount + flatAllowanceAmount;
+        // The source payroll sheet keeps personal leave/BH as a separate informational
+        // amount and does not include it in total income. Its total income is rounded
+        // to the nearest thousand before deductions are applied.
+        const grossIncomeBeforeRounding = monthlySalaryAmount + paidLeaveAmount +
+          overtimeNormalAmount + overtimeSundayAmount + overtimeHolidayAmount + flatAllowanceAmount;
+        const grossIncome = Math.round(grossIncomeBeforeRounding / 1000) * 1000;
 
         // Deductions
-        const employeeInsuranceAmount = adjustment.employeeInsuranceAmountOverride === null || adjustment.employeeInsuranceAmountOverride === undefined
+        const employeeInsuranceAmount = payrollExcluded ? 0 : adjustment.employeeInsuranceAmountOverride === null || adjustment.employeeInsuranceAmountOverride === undefined
           ? Math.round(insuranceSalary * empInsRate)
           : Math.round(parseFloat(adjustment.employeeInsuranceAmountOverride));
         // Union fee is 1% of base salary capped at 30,000 VND
-        const unionFeeAmount = adjustment.unionFeeAmountOverride === null || adjustment.unionFeeAmountOverride === undefined
+        const unionFeeAmount = payrollExcluded ? 0 : adjustment.unionFeeAmountOverride === null || adjustment.unionFeeAmountOverride === undefined
           ? Math.round(Math.min(baseSalary * empUnionRate, 30000))
           : Math.round(parseFloat(adjustment.unionFeeAmountOverride));
 
@@ -339,7 +353,9 @@ export class PayrollCalculationService {
         const advancePayment2 = parseFloat(adjustment.advancePayment2 || 0);
         const pendingLeaveAdvance = parseFloat(adjustment.pendingLeaveAdvance || 0);
 
-        const totalDeduction = employeeInsuranceAmount + unionFeeAmount + pitAmount + advancePayment1 + advancePayment2 + pendingLeaveAdvance;
+        // pendingLeaveAdvance is stored as a day quantity from the source sheet,
+        // not as a monetary deduction.
+        const totalDeduction = employeeInsuranceAmount + unionFeeAmount + pitAmount + advancePayment1 + advancePayment2;
         const netSalary = grossIncome - totalDeduction;
 
         // Round final net salary to nearest thousand VND

@@ -2687,6 +2687,11 @@ export default function PayrollDashboardClient({
                   </div>
 
                   <div className="flex-1 overflow-auto min-h-0">
+                    {selectedCycle && payrollSheetItems.length !== employees.filter((employee: any) => employee.status === "active").length && (
+                      <div className="mx-6 mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Bảng lương hiện có {payrollSheetItems.length} dòng, nhưng đang có {employees.filter((employee: any) => employee.status === "active").length} nhân viên hoạt động. Vui lòng kiểm tra chấm công và cấu hình lương trước khi chốt.
+                      </div>
+                    )}
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">

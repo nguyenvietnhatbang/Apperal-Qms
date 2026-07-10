@@ -45,7 +45,9 @@ function parseRows(rows) {
     .filter((row) => /^\d+$/.test(cleanText(row[0])) && cleanText(row[2]))
     .map((row, index) => ({
       sourceRow: index + 9,
+      employeeCode: cleanText(row[1]),
       fullName: cleanText(row[2]),
+      payrollExcluded: !cleanText(row[37]) && !cleanText(row[45]),
       annualLeaveTotal: numberValue(row[21]),
       paidLeaveDaysOverride: numberValue(row[22]),
       paidLeaveHours: numberValue(row[23]),
@@ -104,17 +106,17 @@ async function main() {
     if (["locked", "paid"].includes(cycle.status)) throw new Error("Không thể cập nhật chu kỳ đã khóa hoặc đã chi trả.");
 
     const employeesResult = await client.query(
-      `SELECT DISTINCT e.id, e.full_name
+      `SELECT e.id, e.employee_code, e.full_name
        FROM employees e
-       JOIN attendance_records ar ON ar.employee_id = e.id AND ar.payroll_cycle_id = $2
-       WHERE e.factory_id = $1 AND e.deleted_at IS NULL`,
-      [factory.id, cycle.id]
+       WHERE e.factory_id = $1 AND e.deleted_at IS NULL AND e.status = 'active'`,
+      [factory.id]
     );
+    const employeeByCode = new Map(employeesResult.rows.map((employee) => [cleanText(employee.employee_code), employee]));
     const employeeByName = new Map(employeesResult.rows.map((employee) => [normalizeName(employee.full_name), employee]));
     const matchedRows = [];
     const skippedRows = [];
     for (const row of sourceRows) {
-      const employee = employeeByName.get(normalizeName(row.fullName));
+      const employee = employeeByCode.get(row.employeeCode) || employeeByName.get(normalizeName(row.fullName));
       if (employee) matchedRows.push({ ...row, employeeId: employee.id });
       else skippedRows.push(row.fullName);
     }
@@ -140,10 +142,10 @@ async function main() {
            actual_workdays_override, paid_leave_days_override, holiday_days_override,
            overtime_normal_hours_override, overtime_sunday_hours_override, overtime_holiday_hours_override,
            employee_insurance_amount_override, union_fee_amount_override, personal_income_tax_amount_override,
-           menstrual_allowance_amount_override, child_allowance_amount_override, note
+           menstrual_allowance_amount_override, child_allowance_amount_override, payroll_excluded, note
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-           $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
+           $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
          ) ON CONFLICT (payroll_cycle_id, employee_id) DO UPDATE SET
            annual_leave_total = EXCLUDED.annual_leave_total, paid_leave_hours = EXCLUDED.paid_leave_hours,
            annual_leave_used_cumulative = EXCLUDED.annual_leave_used_cumulative, annual_leave_remaining = EXCLUDED.annual_leave_remaining,
@@ -161,6 +163,7 @@ async function main() {
            union_fee_amount_override = EXCLUDED.union_fee_amount_override, personal_income_tax_amount_override = EXCLUDED.personal_income_tax_amount_override,
            menstrual_allowance_amount_override = EXCLUDED.menstrual_allowance_amount_override,
            child_allowance_amount_override = EXCLUDED.child_allowance_amount_override,
+           payroll_excluded = EXCLUDED.payroll_excluded,
            note = EXCLUDED.note, updated_at = now()`,
         [
           cycle.id, row.employeeId, row.annualLeaveTotal, row.paidLeaveHours, row.annualLeaveUsedCumulative, row.annualLeaveRemaining,
@@ -171,6 +174,7 @@ async function main() {
           row.holidayDaysOverride, row.overtimeNormalHoursOverride, row.overtimeSundayHoursOverride, row.overtimeHolidayHoursOverride,
           row.employeeInsuranceAmountOverride, row.unionFeeAmountOverride, row.personalIncomeTaxAmountOverride,
           row.menstrualAllowanceAmountOverride, row.childAllowanceAmountOverride,
+          row.payrollExcluded,
           `Import chốt số liệu từ ${path.basename(csvPath)} dòng ${row.sourceRow}.`,
         ]
       );

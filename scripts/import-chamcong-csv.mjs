@@ -12,6 +12,7 @@ const getArgValue = (name, fallback) => {
 };
 
 const apply = args.has("--apply");
+const replaceExisting = args.has("--replace-existing");
 const csvPath = getArgValue("--file", "docs/chamcong.csv");
 const factoryCode = getArgValue("--factory-code", "default");
 const factoryIdArg = getArgValue("--factory-id", "");
@@ -132,6 +133,7 @@ function parseRecords(rows) {
     records.push({
       sourceRow: rowIndex + 1,
       sourceData: row,
+      sourceEmployeeCode: cleanText(row[0]),
       sourceName,
       normalizedName: normalizeName(sourceName),
       workDate,
@@ -190,18 +192,39 @@ async function persistImport(client, factory, cycle, records) {
     `SELECT id, status FROM payroll_cycles WHERE factory_id = $1 AND code = $2`,
     [factory.id, cycle.code]
   );
+  let cycleId;
+  let previousStatus = "draft";
   if (existingCycle.rowCount > 0) {
-    throw new Error(`Xưởng đã có chu kỳ ${cycle.code}. Không tự ghi đè dữ liệu chấm công hiện hữu.`);
+    if (!replaceExisting) {
+      throw new Error(`Xưởng đã có chu kỳ ${cycle.code}. Dùng --replace-existing nếu muốn thay dữ liệu chấm công.`);
+    }
+    previousStatus = existingCycle.rows[0].status;
+    if (["locked", "paid"].includes(previousStatus)) {
+      throw new Error(`Không thể thay dữ liệu chấm công cho chu kỳ ${cycle.code} đã khóa hoặc đã chi trả.`);
+    }
+    cycleId = existingCycle.rows[0].id;
+    await client.query(`DELETE FROM payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
+    await client.query(`DELETE FROM audit_payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
+    await client.query(`DELETE FROM audit_attendance_records WHERE payroll_cycle_id = $1`, [cycleId]);
+    await client.query(`DELETE FROM attendance_records WHERE payroll_cycle_id = $1`, [cycleId]);
+    await client.query(`DELETE FROM attendance_imports WHERE payroll_cycle_id = $1`, [cycleId]);
+    await client.query(
+      `UPDATE payroll_cycles
+       SET period_start = $2::date, period_end = $3::date, standard_workdays = 26,
+           standard_hours_per_day = 8, status = 'draft', calculated_at = NULL, updated_at = now()
+       WHERE id = $1`,
+      [cycleId, cycle.periodStart, cycle.periodEnd]
+    );
+  } else {
+    const cycleResult = await client.query(
+      `INSERT INTO payroll_cycles (
+         factory_id, code, name, period_start, period_end, standard_workdays, standard_hours_per_day, note
+       ) VALUES ($1, $2, $3, $4::date, $5::date, 26, 8, $6)
+       RETURNING id`,
+      [factory.id, cycle.code, cycle.name, cycle.periodStart, cycle.periodEnd, `Import từ ${csvPath}; Chủ nhật được tính tăng ca 200%.`]
+    );
+    cycleId = cycleResult.rows[0].id;
   }
-
-  const cycleResult = await client.query(
-    `INSERT INTO payroll_cycles (
-       factory_id, code, name, period_start, period_end, standard_workdays, standard_hours_per_day, note
-     ) VALUES ($1, $2, $3, $4::date, $5::date, 26, 8, $6)
-     RETURNING id`,
-    [factory.id, cycle.code, cycle.name, cycle.periodStart, cycle.periodEnd, `Import từ ${csvPath}; Chủ nhật được tính tăng ca 200%.`]
-  );
-  const cycleId = cycleResult.rows[0].id;
 
   const importResult = await client.query(
     `INSERT INTO attendance_imports (
@@ -257,8 +280,13 @@ async function persistImport(client, factory, cycle, records) {
 
   await client.query(
     `INSERT INTO payroll_audit_logs (payroll_cycle_id, action, previous_status, next_status, payload)
-     VALUES ($1, 'import_attendance_csv', 'draft', 'cleaned', $2::jsonb)`,
-    [cycleId, JSON.stringify({ fileName: path.basename(csvPath), importedRows: records.length, matchedBy: "employee_name" })]
+     VALUES ($1, 'import_attendance_csv', $2, 'cleaned', $3::jsonb)`,
+    [cycleId, previousStatus, JSON.stringify({
+      fileName: path.basename(csvPath),
+      importedRows: records.length,
+      matchedBy: "employee_name_canonical_code",
+      sourceCodesCorrected: records.filter((record) => record.sourceEmployeeCode !== record.employee.employeeCode).length,
+    })]
   );
   await client.query(`UPDATE payroll_cycles SET status = 'cleaned', updated_at = now() WHERE id = $1`, [cycleId]);
 

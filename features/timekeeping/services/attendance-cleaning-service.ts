@@ -1,6 +1,16 @@
 import { query, queryOne, transaction } from "@/lib/db";
 import { parseVNDecimal } from "@/lib/format";
 
+function normalizeEmployeeName(value: string) {
+  return String(value || "")
+    .replace(/\([^)]*\)/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/gi, "d")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toUpperCase();
+}
+
 export class AttendanceCleaningService {
   /**
    * Process all raw rows of an import task, clean them, and insert into attendance_records.
@@ -180,6 +190,28 @@ export class AttendanceCleaningService {
       }
 
       if (parsedRecords.length > 0) {
+        // Resolve legacy/wrong source codes by the canonical employee name
+        // before matching or creating employees.
+        const existingEmployeesByName = await client.query(
+          `SELECT id, employee_code, full_name
+           FROM employees
+           WHERE factory_id = $1 AND deleted_at IS NULL`,
+          [factory_id]
+        );
+        const employeeByName = new Map<string, { employee_code: string; full_name: string }>(
+          existingEmployeesByName.rows.map((employee: { employee_code: string; full_name: string }) => [
+            normalizeEmployeeName(employee.full_name),
+            employee,
+          ])
+        );
+        for (const record of parsedRecords) {
+          const matchedEmployee = employeeByName.get(normalizeEmployeeName(record.employeeName));
+          if (matchedEmployee) {
+            record.employeeCode = matchedEmployee.employee_code;
+            record.employeeName = matchedEmployee.full_name;
+          }
+        }
+
         const uniqueEmployeeMap = new Map<string, any>();
         for (const record of parsedRecords) {
           if (!uniqueEmployeeMap.has(record.employeeCode)) {
