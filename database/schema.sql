@@ -286,6 +286,8 @@ CREATE TABLE IF NOT EXISTS payroll_adjustments (
   employee_insurance_amount_override numeric(14,2),
   union_fee_amount_override numeric(14,2),
   personal_income_tax_amount_override numeric(14,2),
+  menstrual_allowance_amount_override numeric(14,2),
+  child_allowance_amount_override numeric(14,2),
   note text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -544,6 +546,8 @@ ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS overtime_holiday_hours_
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS employee_insurance_amount_override numeric(14,2);
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS union_fee_amount_override numeric(14,2);
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS personal_income_tax_amount_override numeric(14,2);
+ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS menstrual_allowance_amount_override numeric(14,2);
+ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS child_allowance_amount_override numeric(14,2);
 
 ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS paid_leave_hours numeric(8,2) NOT NULL DEFAULT 0;
 ALTER TABLE audit_payroll_items ADD COLUMN IF NOT EXISTS annual_leave_total numeric(8,2) NOT NULL DEFAULT 0;

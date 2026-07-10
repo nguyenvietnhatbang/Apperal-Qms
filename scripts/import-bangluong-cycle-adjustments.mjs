@@ -58,9 +58,12 @@ function parseRows(rows) {
       overtimeNormalHoursOverride: numberValue(row[30]),
       overtimeSundayHoursOverride: numberValue(row[31]),
       overtimeHolidayHoursOverride: numberValue(row[32]),
-      complianceBonus: numberValue(row[16]),
-      businessTripAllowance: numberValue(row[17]),
+      // These are already included in total_salary from the source payroll sheet.
+      complianceBonus: 0,
+      businessTripAllowance: 0,
       workTripSupport: numberValue(row[38]),
+      menstrualAllowanceAmountOverride: numberValue(row[39]),
+      childAllowanceAmountOverride: numberValue(row[40]),
       nightShiftHours: numberValue(row[59]),
       nightShiftAmount: numberValue(row[63]),
       excessOvertimeNormalHours: numberValue(row[56]),
@@ -136,10 +139,11 @@ async function main() {
            advance_payment_1, advance_payment_2, pending_leave_advance,
            actual_workdays_override, paid_leave_days_override, holiday_days_override,
            overtime_normal_hours_override, overtime_sunday_hours_override, overtime_holiday_hours_override,
-           employee_insurance_amount_override, union_fee_amount_override, personal_income_tax_amount_override, note
+           employee_insurance_amount_override, union_fee_amount_override, personal_income_tax_amount_override,
+           menstrual_allowance_amount_override, child_allowance_amount_override, note
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-           $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
+           $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34
          ) ON CONFLICT (payroll_cycle_id, employee_id) DO UPDATE SET
            annual_leave_total = EXCLUDED.annual_leave_total, paid_leave_hours = EXCLUDED.paid_leave_hours,
            annual_leave_used_cumulative = EXCLUDED.annual_leave_used_cumulative, annual_leave_remaining = EXCLUDED.annual_leave_remaining,
@@ -155,6 +159,8 @@ async function main() {
            overtime_normal_hours_override = EXCLUDED.overtime_normal_hours_override, overtime_sunday_hours_override = EXCLUDED.overtime_sunday_hours_override,
            overtime_holiday_hours_override = EXCLUDED.overtime_holiday_hours_override, employee_insurance_amount_override = EXCLUDED.employee_insurance_amount_override,
            union_fee_amount_override = EXCLUDED.union_fee_amount_override, personal_income_tax_amount_override = EXCLUDED.personal_income_tax_amount_override,
+           menstrual_allowance_amount_override = EXCLUDED.menstrual_allowance_amount_override,
+           child_allowance_amount_override = EXCLUDED.child_allowance_amount_override,
            note = EXCLUDED.note, updated_at = now()`,
         [
           cycle.id, row.employeeId, row.annualLeaveTotal, row.paidLeaveHours, row.annualLeaveUsedCumulative, row.annualLeaveRemaining,
@@ -164,6 +170,7 @@ async function main() {
           row.advancePayment1, row.advancePayment2, row.pendingLeaveAdvance, row.actualWorkdaysOverride, row.paidLeaveDaysOverride,
           row.holidayDaysOverride, row.overtimeNormalHoursOverride, row.overtimeSundayHoursOverride, row.overtimeHolidayHoursOverride,
           row.employeeInsuranceAmountOverride, row.unionFeeAmountOverride, row.personalIncomeTaxAmountOverride,
+          row.menstrualAllowanceAmountOverride, row.childAllowanceAmountOverride,
           `Import chốt số liệu từ ${path.basename(csvPath)} dòng ${row.sourceRow}.`,
         ]
       );

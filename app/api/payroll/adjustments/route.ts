@@ -40,6 +40,8 @@ function normalizeAdjustment(input: any) {
     employeeInsuranceAmountOverride: optionalNumber(input.employeeInsuranceAmountOverride),
     unionFeeAmountOverride: optionalNumber(input.unionFeeAmountOverride),
     personalIncomeTaxAmountOverride: optionalNumber(input.personalIncomeTaxAmountOverride),
+    menstrualAllowanceAmountOverride: optionalNumber(input.menstrualAllowanceAmountOverride),
+    childAllowanceAmountOverride: optionalNumber(input.childAllowanceAmountOverride),
     note: typeof input.note === "string" ? input.note : null,
   };
 }

@@ -153,7 +153,9 @@ export class PayrollCalculationService {
                     overtime_holiday_hours_override as "overtimeHolidayHoursOverride",
                     employee_insurance_amount_override as "employeeInsuranceAmountOverride",
                     union_fee_amount_override as "unionFeeAmountOverride",
-                    personal_income_tax_amount_override as "personalIncomeTaxAmountOverride"
+                    personal_income_tax_amount_override as "personalIncomeTaxAmountOverride",
+                    menstrual_allowance_amount_override as "menstrualAllowanceAmountOverride",
+                    child_allowance_amount_override as "childAllowanceAmountOverride"
              FROM payroll_adjustments
              WHERE payroll_cycle_id = $1 AND employee_id = ANY($2::uuid[])`,
             [cycleId, employeeIds]
@@ -224,8 +226,8 @@ export class PayrollCalculationService {
         // Daily and hourly rates
         const dailyRate = totalSalary / stdWorkdays;
         
-        // Overtime base is baseSalary (fallback to insuranceSalary, then totalSalary)
-        const otBase = baseSalary > 0 ? baseSalary : (insuranceSalary > 0 ? insuranceSalary : totalSalary);
+        // The reference payroll sheet calculates OT from the insurance salary.
+        const otBase = insuranceSalary > 0 ? insuranceSalary : (baseSalary > 0 ? baseSalary : totalSalary);
         const hourlyBase = otBase / stdWorkdays / stdHoursPerDay;
 
         // Leave base is insuranceSalary (fallback to baseSalary, then totalSalary)
@@ -253,16 +255,20 @@ export class PayrollCalculationService {
         const mealAllowance = parseFloat(salaryConfig.mealAllowance || 0);
 
         // Female menstrual allowance (1.5 hours)
-        let menstrualAllowance = 0;
+        let menstrualAllowance = adjustment.menstrualAllowanceAmountOverride === null || adjustment.menstrualAllowanceAmountOverride === undefined
+          ? 0
+          : parseFloat(adjustment.menstrualAllowanceAmountOverride);
         const isFemale = emp.gender === "Nữ" || emp.gender === "Female";
-        if (isFemale && (actualWorkdays > 0 || paidLeaveDays > 0)) {
+        if ((adjustment.menstrualAllowanceAmountOverride === null || adjustment.menstrualAllowanceAmountOverride === undefined) && isFemale && (actualWorkdays > 0 || paidLeaveDays > 0)) {
           const insHourlyRate = leaveBase / stdWorkdays / stdHoursPerDay;
           menstrualAllowance = Math.round(insHourlyRate * 1.5);
         }
 
         // Child under 6 allowance (100.000 per child)
-        let childAllowance = 0;
-        if (emp.has_child_under_6) {
+        let childAllowance = adjustment.childAllowanceAmountOverride === null || adjustment.childAllowanceAmountOverride === undefined
+          ? 0
+          : parseFloat(adjustment.childAllowanceAmountOverride);
+        if ((adjustment.childAllowanceAmountOverride === null || adjustment.childAllowanceAmountOverride === undefined) && emp.has_child_under_6) {
           const childCount = emp.dependent_count > 0 ? emp.dependent_count : 1;
           childAllowance = 100000 * childCount;
         }
@@ -270,8 +276,7 @@ export class PayrollCalculationService {
         // Total allowances flat (excluding pro-rated allowances which are built into total_salary)
         // Seniority allowance is paid flat on top as observed in the template sheet
         const flatAllowanceAmount = seniorityAllowance + menstrualAllowance + childAllowance +
-          businessTripAllowance + complianceBonus + workTripSupport + nightShiftAmount +
-          excessOvertimeNormalAmount + excessOvertimeSundayAmount + excessOvertimeHolidayAmount;
+          businessTripAllowance + complianceBonus + workTripSupport + nightShiftAmount;
 
         // Gross Income
         const grossIncome = monthlySalaryAmount + paidLeaveAmount + 

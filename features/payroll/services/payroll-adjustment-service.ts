@@ -31,6 +31,8 @@ export interface PayrollAdjustmentInput {
   employeeInsuranceAmountOverride?: number | null;
   unionFeeAmountOverride?: number | null;
   personalIncomeTaxAmountOverride?: number | null;
+  menstrualAllowanceAmountOverride?: number | null;
+  childAllowanceAmountOverride?: number | null;
   note?: string | null;
 }
 
@@ -70,6 +72,8 @@ const adjustmentSelect = `
   pa.employee_insurance_amount_override as "employeeInsuranceAmountOverride",
   pa.union_fee_amount_override as "unionFeeAmountOverride",
   pa.personal_income_tax_amount_override as "personalIncomeTaxAmountOverride",
+  pa.menstrual_allowance_amount_override as "menstrualAllowanceAmountOverride",
+  pa.child_allowance_amount_override as "childAllowanceAmountOverride",
   pa.note
 `;
 
@@ -130,9 +134,10 @@ export class PayrollAdjustmentService {
          advance_payment_1, advance_payment_2, pending_leave_advance,
          actual_workdays_override, paid_leave_days_override, holiday_days_override,
          overtime_normal_hours_override, overtime_sunday_hours_override, overtime_holiday_hours_override,
-         employee_insurance_amount_override, union_fee_amount_override, personal_income_tax_amount_override, note
+         employee_insurance_amount_override, union_fee_amount_override, personal_income_tax_amount_override,
+         menstrual_allowance_amount_override, child_allowance_amount_override, note
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
        ON CONFLICT (payroll_cycle_id, employee_id) DO UPDATE
        SET annual_leave_total = EXCLUDED.annual_leave_total,
            paid_leave_hours = EXCLUDED.paid_leave_hours,
@@ -163,6 +168,8 @@ export class PayrollAdjustmentService {
            employee_insurance_amount_override = EXCLUDED.employee_insurance_amount_override,
            union_fee_amount_override = EXCLUDED.union_fee_amount_override,
            personal_income_tax_amount_override = EXCLUDED.personal_income_tax_amount_override,
+           menstrual_allowance_amount_override = EXCLUDED.menstrual_allowance_amount_override,
+           child_allowance_amount_override = EXCLUDED.child_allowance_amount_override,
            note = EXCLUDED.note,
            updated_at = now()
        RETURNING id`,
@@ -198,6 +205,8 @@ export class PayrollAdjustmentService {
         toOptionalNumber(data.employeeInsuranceAmountOverride),
         toOptionalNumber(data.unionFeeAmountOverride),
         toOptionalNumber(data.personalIncomeTaxAmountOverride),
+        toOptionalNumber(data.menstrualAllowanceAmountOverride),
+        toOptionalNumber(data.childAllowanceAmountOverride),
         data.note || null,
       ]
     );

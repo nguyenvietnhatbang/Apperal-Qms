@@ -296,7 +296,7 @@ function buildPayrollRow(row: any, index: number) {
     toNumber(row.excessOvertimeSundayAmount),
     toNumber(row.excessOvertimeHolidayAmount),
     toNumber(row.nightShiftAmount),
-    toNumber(row.secondPaymentAmount),
+    toNumber(row.excessOvertimeNormalAmount) + toNumber(row.excessOvertimeSundayAmount) + toNumber(row.excessOvertimeHolidayAmount),
     toNumber(row.pendingLeaveAdvance),
   ];
 
