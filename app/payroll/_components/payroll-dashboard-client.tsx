@@ -1043,9 +1043,9 @@ export default function PayrollDashboardClient({
     }
   };
 
-  const updateAdjustmentValue = (employeeId: string, key: string, value: string | null) => {
+  const updateAdjustmentValue = (employeeId: string, key: string, value: string) => {
     setPayrollAdjustments((current) => current.map((item) => (
-      item.employeeId === employeeId ? { ...item, [key]: value === null ? null : Number(value || 0) } : item
+      item.employeeId === employeeId ? { ...item, [key]: Number(value || 0) } : item
     )));
   };
 
@@ -1405,7 +1405,7 @@ export default function PayrollDashboardClient({
         </header>
 
         {/* Content Wrapper */}
-        <main className="flex-1 flex flex-col min-h-0 p-6 overflow-hidden bg-zinc-50">
+        <main className="flex-1 flex flex-col min-h-0 p-3 lg:p-4 overflow-hidden bg-zinc-50">
           {/* Loading Indicator */}
           {isLoading && (
             <div className="absolute inset-0 bg-white/60 backdrop-blur-xs flex items-center justify-center z-50">
@@ -2044,12 +2044,12 @@ export default function PayrollDashboardClient({
 
                   {/* Table Grid */}
                   <div className="flex-1 overflow-auto min-h-0">
-                    <table className="w-full min-w-[980px] text-left border-collapse text-xs">
+                    <table className="w-full min-w-[1320px] text-left border-collapse text-sm">
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
-                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[220px]">Tên quy tắc</th>
-                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[220px]">Mã quy tắc</th>
-                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[130px] text-right">Giá trị cấu hình</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[280px]">Tên quy tắc</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[280px]">Mã quy tắc</th>
+                          <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[260px] text-right">Giá trị cấu hình</th>
                           <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[100px]">Đơn vị</th>
                           <th className="px-5 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20 min-w-[300px]">Mô tả chi tiết</th>
                         </tr>
@@ -2090,7 +2090,7 @@ export default function PayrollDashboardClient({
                                           handleRuleUpdate(rule.id, rule.code, val);
                                         }
                                       }}
-                                      className="w-24 text-right border border-zinc-250 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-850 focus:border-blue-500 outline-none"
+                                      className="w-full min-w-[220px] text-right border border-zinc-250 rounded-lg px-3 py-2 text-sm font-bold text-zinc-850 focus:border-blue-500 outline-none"
                                     />
                                   </td>
                                   <td className="px-5 py-3.5">
@@ -2449,7 +2449,7 @@ export default function PayrollDashboardClient({
             {activeTab === "adjustments" && (() => {
               const totalItems = filteredAdjustments.length;
               const totalPages = Math.ceil(totalItems / limitAdjustments) || 1;
-              const inputClass = "w-24 rounded-lg border border-zinc-250 px-2 py-1 text-right text-xs font-semibold text-zinc-800 outline-none focus:border-blue-500";
+              const inputClass = "w-36 rounded-lg border border-zinc-250 px-3 py-2 text-right text-sm font-semibold text-zinc-800 outline-none focus:border-blue-500";
               const renderNumberInput = (item: any, key: string) => (
                 <input
                   type="number"
@@ -2457,17 +2457,6 @@ export default function PayrollDashboardClient({
                   step="any"
                   value={item[key] || 0}
                   onChange={(event) => updateAdjustmentValue(item.employeeId, key, event.target.value)}
-                  className={inputClass}
-                />
-              );
-              const renderOptionalNumberInput = (item: any, key: string) => (
-                <input
-                  type="number"
-                  min={0}
-                  step="any"
-                  value={item[key] ?? ""}
-                  placeholder="Tự tính"
-                  onChange={(event) => updateAdjustmentValue(item.employeeId, key, event.target.value === "" ? null : event.target.value)}
                   className={inputClass}
                 />
               );
@@ -2514,6 +2503,7 @@ export default function PayrollDashboardClient({
                           className="pl-10 pr-4 py-2 bg-white border border-zinc-250 rounded-xl text-sm w-60 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                         />
                       </div>
+                      <span className="text-xs font-semibold text-zinc-500">Chỉ nhập khoản phát sinh; công, phép và tăng ca lấy từ chấm công.</span>
                     </div>
                     <button
                       onClick={() => selectedCycleId && handleCalculatePayroll(selectedCycleId)}
@@ -2526,37 +2516,20 @@ export default function PayrollDashboardClient({
                   </div>
 
                   <div className="flex-1 overflow-auto min-h-0">
-                    <table className="w-full min-w-[3200px] text-left border-collapse text-xs">
+                    <table className="w-full min-w-[2300px] text-left border-collapse text-sm">
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
                           <th className="px-4 py-3.5 sticky top-0 left-0 bg-zinc-50 border-b border-zinc-200 z-30 min-w-[90px]">Mã NV</th>
                           <th className="px-4 py-3.5 sticky top-0 left-[90px] bg-zinc-50 border-b border-zinc-200 z-30 min-w-[170px]">Họ tên</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Công chốt</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép trả</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lễ chốt</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT thường chốt</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT CN chốt</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT lễ chốt</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">BHXH chốt</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Đoàn phí chốt</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">TNCN chốt</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Tổng phép</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Giờ PN</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép cộng dồn</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép còn</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Việc riêng/BH</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương việc riêng/BH</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Công tác</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Thưởng tuân thủ</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">PC phí công tác</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Giờ làm đêm</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương làm đêm</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT vượt thường h</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT CN h</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT lễ h</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương OT vượt thường</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương OT CN</th>
-                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lương OT lễ</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Hỗ trợ ca đêm</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ứng đợt 1</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ứng đợt 2</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ứng phép chờ việc</th>
@@ -2566,39 +2539,22 @@ export default function PayrollDashboardClient({
                       <tbody className="divide-y divide-zinc-100 text-zinc-750">
                         {paginatedAdjustments.length === 0 ? (
                           <tr>
-                            <td colSpan={32} className="px-4 py-8 text-center text-zinc-400">Chưa có nhân viên hoặc chưa chọn chu kỳ.</td>
+                            <td colSpan={15} className="px-4 py-8 text-center text-zinc-400">Chưa có nhân viên hoặc chưa chọn chu kỳ.</td>
                           </tr>
                         ) : (
                           paginatedAdjustments.map((item) => (
                             <tr key={item.employeeId} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
                               <td className="px-4 py-3 sticky left-0 bg-white font-mono font-bold text-zinc-700 z-20">{item.employeeCode}</td>
                               <td className="px-4 py-3 sticky left-[90px] bg-white font-bold text-zinc-800 z-20">{item.employeeName}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "actualWorkdaysOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "paidLeaveDaysOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "holidayDaysOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeNormalHoursOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeSundayHoursOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeHolidayHoursOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "employeeInsuranceAmountOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "unionFeeAmountOverride")}</td>
-                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "personalIncomeTaxAmountOverride")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveTotal")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "paidLeaveHours")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveUsedCumulative")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveRemaining")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "personalLeaveDays")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "personalLeaveAmount")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "businessTripAllowance")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "complianceBonus")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "workTripSupport")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "nightShiftHours")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "nightShiftAmount")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeNormalHours")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeSundayHours")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeHolidayHours")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeNormalAmount")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeSundayAmount")}</td>
-                              <td className="px-3 py-2">{renderNumberInput(item, "excessOvertimeHolidayAmount")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "advancePayment1")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "advancePayment2")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "pendingLeaveAdvance")}</td>
