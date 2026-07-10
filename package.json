@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "init:admin": "node scripts/init-admin.mjs",
-    "import:bangluong": "node scripts/import-bangluong-csv.mjs"
+    "import:bangluong": "node scripts/import-bangluong-csv.mjs",
+    "import:chamcong": "node scripts/import-chamcong-csv.mjs",
+    "import:bangluong-cycle": "node scripts/import-bangluong-cycle-adjustments.mjs"
   },
   "dependencies": {
     "csv-parse": "^7.0.0",

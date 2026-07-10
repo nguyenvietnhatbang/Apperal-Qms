@@ -84,10 +84,29 @@ export class PayrollCalculationService {
                ORDER BY employee_id, work_date, updated_at DESC, created_at DESC, id DESC
              )
              SELECT employee_id as "employeeId",
-                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN', 'P') THEN 1 ELSE 0 END), 0) as "paidLeaveDays",
-                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L', 'LE') THEN 1 ELSE 0 END), 0) as "holidayDays",
-                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('RO', 'KP') THEN 1 ELSE 0 END), 0) as "unpaidLeaveDays",
-                    COALESCE(SUM(CASE WHEN UPPER(TRIM(COALESCE(symbol, ''))) NOT IN ('PN', 'P', 'L', 'LE', 'RO', 'KP') THEN workday_count ELSE 0 END), 0) as "actualWorkdays",
+                    COALESCE(SUM(CASE
+                      WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN', 'P', 'BH') THEN 1
+                      WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN/2', 'P/2', 'BH/2') THEN 0.5
+                      ELSE 0
+                    END), 0) as "paidLeaveDays",
+                    COALESCE(SUM(CASE
+                      WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L', 'LE') THEN 1
+                      WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L/2', 'LE/2') THEN 0.5
+                      ELSE 0
+                    END), 0) as "holidayDays",
+                    COALESCE(SUM(CASE
+                      WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('RO', 'KP', 'K') THEN 1
+                      WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('RO/2', 'KP/2', 'K/2') THEN 0.5
+                      ELSE 0
+                    END), 0) as "unpaidLeaveDays",
+                    COALESCE(SUM(GREATEST(
+                      workday_count - CASE
+                        WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN', 'P', 'BH', 'L', 'LE', 'RO', 'KP', 'K') THEN 1
+                        WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN/2', 'P/2', 'BH/2', 'L/2', 'LE/2', 'RO/2', 'KP/2', 'K/2') THEN 0.5
+                        ELSE 0
+                      END,
+                      0
+                    )), 0) as "actualWorkdays",
                     COALESCE(SUM(overtime_normal_hours), 0) as "overtimeNormalHours",
                     COALESCE(SUM(overtime_sunday_hours), 0) as "overtimeSundayHours",
                     COALESCE(SUM(overtime_holiday_hours), 0) as "overtimeHolidayHours"
@@ -125,7 +144,16 @@ export class PayrollCalculationService {
                     excess_overtime_holiday_amount as "excessOvertimeHolidayAmount",
                     advance_payment_1 as "advancePayment1",
                     advance_payment_2 as "advancePayment2",
-                    pending_leave_advance as "pendingLeaveAdvance"
+                    pending_leave_advance as "pendingLeaveAdvance",
+                    actual_workdays_override as "actualWorkdaysOverride",
+                    paid_leave_days_override as "paidLeaveDaysOverride",
+                    holiday_days_override as "holidayDaysOverride",
+                    overtime_normal_hours_override as "overtimeNormalHoursOverride",
+                    overtime_sunday_hours_override as "overtimeSundayHoursOverride",
+                    overtime_holiday_hours_override as "overtimeHolidayHoursOverride",
+                    employee_insurance_amount_override as "employeeInsuranceAmountOverride",
+                    union_fee_amount_override as "unionFeeAmountOverride",
+                    personal_income_tax_amount_override as "personalIncomeTaxAmountOverride"
              FROM payroll_adjustments
              WHERE payroll_cycle_id = $1 AND employee_id = ANY($2::uuid[])`,
             [cycleId, employeeIds]
@@ -150,14 +178,26 @@ export class PayrollCalculationService {
         const attendanceTotals = attendanceTotalsByEmployeeId.get(emp.id);
         if (!attendanceTotals) continue;
 
-        const actualWorkdays = parseFloat(attendanceTotals?.actualWorkdays || 0);
-        const paidLeaveDays = parseFloat(attendanceTotals?.paidLeaveDays || 0);
-        const holidayDays = parseFloat(attendanceTotals?.holidayDays || 0);
-        const unpaidLeaveDays = parseFloat(attendanceTotals?.unpaidLeaveDays || 0);
-        const overtimeNormalHours = parseFloat(attendanceTotals?.overtimeNormalHours || 0);
-        const overtimeSundayHours = parseFloat(attendanceTotals?.overtimeSundayHours || 0);
-        const overtimeHolidayHours = parseFloat(attendanceTotals?.overtimeHolidayHours || 0);
         const adjustment = adjustmentsByEmployeeId.get(emp.id) || {};
+        const actualWorkdays = adjustment.actualWorkdaysOverride === null || adjustment.actualWorkdaysOverride === undefined
+          ? parseFloat(attendanceTotals?.actualWorkdays || 0)
+          : parseFloat(adjustment.actualWorkdaysOverride);
+        const paidLeaveDays = adjustment.paidLeaveDaysOverride === null || adjustment.paidLeaveDaysOverride === undefined
+          ? parseFloat(attendanceTotals?.paidLeaveDays || 0)
+          : parseFloat(adjustment.paidLeaveDaysOverride);
+        const holidayDays = adjustment.holidayDaysOverride === null || adjustment.holidayDaysOverride === undefined
+          ? parseFloat(attendanceTotals?.holidayDays || 0)
+          : parseFloat(adjustment.holidayDaysOverride);
+        const unpaidLeaveDays = parseFloat(attendanceTotals?.unpaidLeaveDays || 0);
+        const overtimeNormalHours = adjustment.overtimeNormalHoursOverride === null || adjustment.overtimeNormalHoursOverride === undefined
+          ? parseFloat(attendanceTotals?.overtimeNormalHours || 0)
+          : parseFloat(adjustment.overtimeNormalHoursOverride);
+        const overtimeSundayHours = adjustment.overtimeSundayHoursOverride === null || adjustment.overtimeSundayHoursOverride === undefined
+          ? parseFloat(attendanceTotals?.overtimeSundayHours || 0)
+          : parseFloat(adjustment.overtimeSundayHoursOverride);
+        const overtimeHolidayHours = adjustment.overtimeHolidayHoursOverride === null || adjustment.overtimeHolidayHoursOverride === undefined
+          ? parseFloat(attendanceTotals?.overtimeHolidayHours || 0)
+          : parseFloat(adjustment.overtimeHolidayHoursOverride);
         const annualLeaveTotal = parseFloat(adjustment.annualLeaveTotal || 0);
         const paidLeaveHours = parseFloat(adjustment.paidLeaveHours || 0);
         const annualLeaveUsedCumulative = parseFloat(adjustment.annualLeaveUsedCumulative || 0);
@@ -238,9 +278,13 @@ export class PayrollCalculationService {
           overtimeNormalAmount + overtimeSundayAmount + overtimeHolidayAmount + personalLeaveAmount + flatAllowanceAmount;
 
         // Deductions
-        const employeeInsuranceAmount = Math.round(insuranceSalary * empInsRate);
+        const employeeInsuranceAmount = adjustment.employeeInsuranceAmountOverride === null || adjustment.employeeInsuranceAmountOverride === undefined
+          ? Math.round(insuranceSalary * empInsRate)
+          : Math.round(parseFloat(adjustment.employeeInsuranceAmountOverride));
         // Union fee is 1% of base salary capped at 30,000 VND
-        const unionFeeAmount = Math.round(Math.min(baseSalary * empUnionRate, 30000));
+        const unionFeeAmount = adjustment.unionFeeAmountOverride === null || adjustment.unionFeeAmountOverride === undefined
+          ? Math.round(Math.min(baseSalary * empUnionRate, 30000))
+          : Math.round(parseFloat(adjustment.unionFeeAmountOverride));
 
         // Company trích đóng (BHXH 17.5%, BHYT 3%, BHTN 1%, Kinh phí công đoàn 2%)
         const ctyBHXH = rules["company_social_insurance_rate"] || 0.175;
@@ -255,8 +299,10 @@ export class PayrollCalculationService {
         const dependentDeduction = 4400000 * (emp.dependent_count || 0);
         const taxableIncome = Math.max(0, grossIncome - employeeInsuranceAmount - unionFeeAmount - personalDeduction - dependentDeduction);
         
-        let pitAmount = 0;
-        if (taxableIncome > 0) {
+        let pitAmount = adjustment.personalIncomeTaxAmountOverride === null || adjustment.personalIncomeTaxAmountOverride === undefined
+          ? 0
+          : Math.round(parseFloat(adjustment.personalIncomeTaxAmountOverride));
+        if ((adjustment.personalIncomeTaxAmountOverride === null || adjustment.personalIncomeTaxAmountOverride === undefined) && taxableIncome > 0) {
           // PIT progressive brackets (Vietnam)
           // <= 5M: 5%
           // 5M - 10M: 10%

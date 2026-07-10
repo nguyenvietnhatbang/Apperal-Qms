@@ -1043,9 +1043,9 @@ export default function PayrollDashboardClient({
     }
   };
 
-  const updateAdjustmentValue = (employeeId: string, key: string, value: string) => {
+  const updateAdjustmentValue = (employeeId: string, key: string, value: string | null) => {
     setPayrollAdjustments((current) => current.map((item) => (
-      item.employeeId === employeeId ? { ...item, [key]: Number(value || 0) } : item
+      item.employeeId === employeeId ? { ...item, [key]: value === null ? null : Number(value || 0) } : item
     )));
   };
 
@@ -2460,6 +2460,17 @@ export default function PayrollDashboardClient({
                   className={inputClass}
                 />
               );
+              const renderOptionalNumberInput = (item: any, key: string) => (
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={item[key] ?? ""}
+                  placeholder="Tự tính"
+                  onChange={(event) => updateAdjustmentValue(item.employeeId, key, event.target.value === "" ? null : event.target.value)}
+                  className={inputClass}
+                />
+              );
 
               return (
                 <>
@@ -2515,11 +2526,20 @@ export default function PayrollDashboardClient({
                   </div>
 
                   <div className="flex-1 overflow-auto min-h-0">
-                    <table className="w-full min-w-[2300px] text-left border-collapse text-xs">
+                    <table className="w-full min-w-[3200px] text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
                           <th className="px-4 py-3.5 sticky top-0 left-0 bg-zinc-50 border-b border-zinc-200 z-30 min-w-[90px]">Mã NV</th>
                           <th className="px-4 py-3.5 sticky top-0 left-[90px] bg-zinc-50 border-b border-zinc-200 z-30 min-w-[170px]">Họ tên</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Công chốt</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép trả</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Lễ chốt</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT thường chốt</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT CN chốt</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT lễ chốt</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">BHXH chốt</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Đoàn phí chốt</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">TNCN chốt</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Tổng phép</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Giờ PN</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép cộng dồn</th>
@@ -2546,13 +2566,22 @@ export default function PayrollDashboardClient({
                       <tbody className="divide-y divide-zinc-100 text-zinc-750">
                         {paginatedAdjustments.length === 0 ? (
                           <tr>
-                            <td colSpan={23} className="px-4 py-8 text-center text-zinc-400">Chưa có nhân viên hoặc chưa chọn chu kỳ.</td>
+                            <td colSpan={32} className="px-4 py-8 text-center text-zinc-400">Chưa có nhân viên hoặc chưa chọn chu kỳ.</td>
                           </tr>
                         ) : (
                           paginatedAdjustments.map((item) => (
                             <tr key={item.employeeId} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
                               <td className="px-4 py-3 sticky left-0 bg-white font-mono font-bold text-zinc-700 z-20">{item.employeeCode}</td>
                               <td className="px-4 py-3 sticky left-[90px] bg-white font-bold text-zinc-800 z-20">{item.employeeName}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "actualWorkdaysOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "paidLeaveDaysOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "holidayDaysOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeNormalHoursOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeSundayHoursOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeHolidayHoursOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "employeeInsuranceAmountOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "unionFeeAmountOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "personalIncomeTaxAmountOverride")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveTotal")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "paidLeaveHours")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveUsedCumulative")}</td>

@@ -8,6 +8,7 @@ import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : "Lỗi máy chủ";
 
 function normalizeAdjustment(input: any) {
+  const optionalNumber = (value: unknown) => value === null || value === undefined || value === "" ? null : Number(value);
   return {
     employeeId: String(input.employeeId || ""),
     annualLeaveTotal: Number(input.annualLeaveTotal || 0),
@@ -30,13 +31,22 @@ function normalizeAdjustment(input: any) {
     advancePayment1: Number(input.advancePayment1 || 0),
     advancePayment2: Number(input.advancePayment2 || 0),
     pendingLeaveAdvance: Number(input.pendingLeaveAdvance || 0),
+    actualWorkdaysOverride: optionalNumber(input.actualWorkdaysOverride),
+    paidLeaveDaysOverride: optionalNumber(input.paidLeaveDaysOverride),
+    holidayDaysOverride: optionalNumber(input.holidayDaysOverride),
+    overtimeNormalHoursOverride: optionalNumber(input.overtimeNormalHoursOverride),
+    overtimeSundayHoursOverride: optionalNumber(input.overtimeSundayHoursOverride),
+    overtimeHolidayHoursOverride: optionalNumber(input.overtimeHolidayHoursOverride),
+    employeeInsuranceAmountOverride: optionalNumber(input.employeeInsuranceAmountOverride),
+    unionFeeAmountOverride: optionalNumber(input.unionFeeAmountOverride),
+    personalIncomeTaxAmountOverride: optionalNumber(input.personalIncomeTaxAmountOverride),
     note: typeof input.note === "string" ? input.note : null,
   };
 }
 
 function hasInvalidNumber(item: ReturnType<typeof normalizeAdjustment>) {
   return Object.entries(item).some(([key, value]) => {
-    if (key === "employeeId" || key === "note") return false;
+    if (key === "employeeId" || key === "note" || value === null) return false;
     return Number.isNaN(value) || Number(value) < 0;
   });
 }

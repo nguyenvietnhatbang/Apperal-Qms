@@ -22,6 +22,15 @@ export interface PayrollAdjustmentInput {
   advancePayment1?: number;
   advancePayment2?: number;
   pendingLeaveAdvance?: number;
+  actualWorkdaysOverride?: number | null;
+  paidLeaveDaysOverride?: number | null;
+  holidayDaysOverride?: number | null;
+  overtimeNormalHoursOverride?: number | null;
+  overtimeSundayHoursOverride?: number | null;
+  overtimeHolidayHoursOverride?: number | null;
+  employeeInsuranceAmountOverride?: number | null;
+  unionFeeAmountOverride?: number | null;
+  personalIncomeTaxAmountOverride?: number | null;
   note?: string | null;
 }
 
@@ -52,12 +61,26 @@ const adjustmentSelect = `
   COALESCE(pa.advance_payment_1, 0) as "advancePayment1",
   COALESCE(pa.advance_payment_2, 0) as "advancePayment2",
   COALESCE(pa.pending_leave_advance, 0) as "pendingLeaveAdvance",
+  pa.actual_workdays_override as "actualWorkdaysOverride",
+  pa.paid_leave_days_override as "paidLeaveDaysOverride",
+  pa.holiday_days_override as "holidayDaysOverride",
+  pa.overtime_normal_hours_override as "overtimeNormalHoursOverride",
+  pa.overtime_sunday_hours_override as "overtimeSundayHoursOverride",
+  pa.overtime_holiday_hours_override as "overtimeHolidayHoursOverride",
+  pa.employee_insurance_amount_override as "employeeInsuranceAmountOverride",
+  pa.union_fee_amount_override as "unionFeeAmountOverride",
+  pa.personal_income_tax_amount_override as "personalIncomeTaxAmountOverride",
   pa.note
 `;
 
 function toNumber(value: unknown) {
   const numberValue = Number(value || 0);
   return Number.isFinite(numberValue) ? numberValue : 0;
+}
+
+function toOptionalNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  return toNumber(value);
 }
 
 export class PayrollAdjustmentService {
@@ -104,9 +127,12 @@ export class PayrollAdjustmentService {
          night_shift_hours, night_shift_amount, excess_overtime_normal_hours,
          excess_overtime_sunday_hours, excess_overtime_holiday_hours,
          excess_overtime_normal_amount, excess_overtime_sunday_amount, excess_overtime_holiday_amount,
-         advance_payment_1, advance_payment_2, pending_leave_advance, note
+         advance_payment_1, advance_payment_2, pending_leave_advance,
+         actual_workdays_override, paid_leave_days_override, holiday_days_override,
+         overtime_normal_hours_override, overtime_sunday_hours_override, overtime_holiday_hours_override,
+         employee_insurance_amount_override, union_fee_amount_override, personal_income_tax_amount_override, note
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
        ON CONFLICT (payroll_cycle_id, employee_id) DO UPDATE
        SET annual_leave_total = EXCLUDED.annual_leave_total,
            paid_leave_hours = EXCLUDED.paid_leave_hours,
@@ -128,6 +154,15 @@ export class PayrollAdjustmentService {
            advance_payment_1 = EXCLUDED.advance_payment_1,
            advance_payment_2 = EXCLUDED.advance_payment_2,
            pending_leave_advance = EXCLUDED.pending_leave_advance,
+           actual_workdays_override = EXCLUDED.actual_workdays_override,
+           paid_leave_days_override = EXCLUDED.paid_leave_days_override,
+           holiday_days_override = EXCLUDED.holiday_days_override,
+           overtime_normal_hours_override = EXCLUDED.overtime_normal_hours_override,
+           overtime_sunday_hours_override = EXCLUDED.overtime_sunday_hours_override,
+           overtime_holiday_hours_override = EXCLUDED.overtime_holiday_hours_override,
+           employee_insurance_amount_override = EXCLUDED.employee_insurance_amount_override,
+           union_fee_amount_override = EXCLUDED.union_fee_amount_override,
+           personal_income_tax_amount_override = EXCLUDED.personal_income_tax_amount_override,
            note = EXCLUDED.note,
            updated_at = now()
        RETURNING id`,
@@ -154,6 +189,15 @@ export class PayrollAdjustmentService {
         toNumber(data.advancePayment1),
         toNumber(data.advancePayment2),
         toNumber(data.pendingLeaveAdvance),
+        toOptionalNumber(data.actualWorkdaysOverride),
+        toOptionalNumber(data.paidLeaveDaysOverride),
+        toOptionalNumber(data.holidayDaysOverride),
+        toOptionalNumber(data.overtimeNormalHoursOverride),
+        toOptionalNumber(data.overtimeSundayHoursOverride),
+        toOptionalNumber(data.overtimeHolidayHoursOverride),
+        toOptionalNumber(data.employeeInsuranceAmountOverride),
+        toOptionalNumber(data.unionFeeAmountOverride),
+        toOptionalNumber(data.personalIncomeTaxAmountOverride),
         data.note || null,
       ]
     );
