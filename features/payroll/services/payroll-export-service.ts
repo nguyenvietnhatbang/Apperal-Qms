@@ -28,29 +28,12 @@ function createEmptyRow() {
   return Array.from({ length: 66 }, () => "") as unknown[];
 }
 
-function getPayrollTitle(cycle: any) {
-  const periodStart = new Date(String(cycle.periodStart));
-  if (!Number.isNaN(periodStart.getTime())) {
-    const month = String(periodStart.getUTCMonth() + 1).padStart(2, "0");
-    return `BẢNG LƯƠNG THÁNG ${month}/${periodStart.getUTCFullYear()}`;
-  }
+function buildTemplateRows() {
+  const rows = Array.from({ length: 3 }, () => createEmptyRow());
+  rows[0] = ["", ...Array.from({ length: 64 }, (_, index) => index + 1), ""];
 
-  return `BẢNG LƯƠNG ${String(cycle.name || cycle.code || "").toUpperCase()}`;
-}
-
-function buildTemplateRows(cycle: any) {
-  const rows = Array.from({ length: 8 }, () => createEmptyRow());
-
-  rows[0][1] = "CÔNG TY TNHH TM MTV CẨM THIÊN";
-  rows[1][1] = "Địa chỉ: Tổ 11, KP. Bình Ý, Phường Tân Triều, tỉnh Đồng Nai.";
-  rows[1][39] = 973500;
-  rows[2][11] = toNumber(cycle.standardWorkdays) || 26;
-  rows[3][1] = getPayrollTitle(cycle);
-  rows[4][18] = 25000;
-  rows[5] = ["", ...Array.from({ length: 64 }, (_, index) => index + 1), ""];
-
-  const mainHeader = rows[6];
-  const subHeader = rows[7];
+  const mainHeader = rows[1];
+  const subHeader = rows[2];
 
   mainHeader[0] = "STT";
   mainHeader[1] = "Mã nhân viên";
@@ -142,16 +125,15 @@ function buildTemplateRows(cycle: any) {
 
 function getWorksheetMerges() {
   return [
-    ["B4", "BN4"],
-    ["D7", "E7"],
-    ["K7", "N7"],
-    ["O7", "U7"],
-    ["V7", "AA7"],
-    ["AE7", "AG7"],
-    ["AH7", "AK7"],
-    ["AM7", "AO7"],
-    ["AP7", "AR7"],
-    ["AU7", "AY7"],
+    ["D2", "E2"],
+    ["K2", "N2"],
+    ["O2", "U2"],
+    ["V2", "AA2"],
+    ["AE2", "AG2"],
+    ["AH2", "AK2"],
+    ["AM2", "AO2"],
+    ["AP2", "AR2"],
+    ["AU2", "AY2"],
     ...[
       "A",
       "B",
@@ -182,36 +164,8 @@ function getWorksheetMerges() {
       "BL",
       "BM",
       "BN",
-    ].map((column) => [`${column}7`, `${column}8`]),
+    ].map((column) => [`${column}2`, `${column}3`]),
   ];
-}
-
-function toRoman(value: number) {
-  const romans: Array<[number, string]> = [
-    [1000, "M"],
-    [900, "CM"],
-    [500, "D"],
-    [400, "CD"],
-    [100, "C"],
-    [90, "XC"],
-    [50, "L"],
-    [40, "XL"],
-    [10, "X"],
-    [9, "IX"],
-    [5, "V"],
-    [4, "IV"],
-    [1, "I"],
-  ];
-
-  let result = "";
-  let remaining = value;
-  for (const [decimal, roman] of romans) {
-    while (remaining >= decimal) {
-      result += roman;
-      remaining -= decimal;
-    }
-  }
-  return result;
 }
 
 function buildPayrollRow(row: any, index: number) {
@@ -303,41 +257,19 @@ function buildPayrollRow(row: any, index: number) {
   return values.slice(0, 66);
 }
 
-function buildDepartmentSummaryRow(departmentName: string, employeeRows: unknown[][], groupIndex: number) {
-  const summary: unknown[] = Array.from({ length: 66 }, () => "");
-  summary[0] = toRoman(groupIndex + 1);
-  summary[1] = departmentName.toUpperCase();
-
+function buildPayrollRows(rows: any[]) {
+  const employeeRows = rows.map((row, index) => buildPayrollRow(row, index));
+  const totalRow: unknown[] = Array.from({ length: 66 }, () => "");
+  totalRow[1] = "TỔNG CỘNG";
   for (let columnIndex = 7; columnIndex < 66; columnIndex++) {
     const total = employeeRows.reduce((sum, row) => sum + toNumber(row[columnIndex]), 0);
-    if (total !== 0) summary[columnIndex] = total;
+    if (total !== 0) totalRow[columnIndex] = total;
   }
-
-  return summary;
-}
-
-function buildGroupedPayrollRows(rows: any[]) {
-  const grouped = new Map<string, any[]>();
-  for (const row of rows) {
-    const departmentName = String(row.departmentName || "CHƯA PHÂN LOẠI").trim() || "CHƯA PHÂN LOẠI";
-    const existingRows = grouped.get(departmentName) || [];
-    existingRows.push(row);
-    grouped.set(departmentName, existingRows);
-  }
-
-  const result: unknown[][] = [];
-  let employeeIndex = 0;
-  Array.from(grouped.entries()).forEach(([departmentName, departmentRows], groupIndex) => {
-    const employeeRows = departmentRows.map((row) => buildPayrollRow(row, employeeIndex++));
-    result.push(buildDepartmentSummaryRow(departmentName, employeeRows, groupIndex));
-    result.push(...employeeRows);
-  });
-
-  return result;
+  return [...employeeRows, totalRow];
 }
 
 function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
-  worksheet.views = [{ state: "frozen", xSplit: 3, ySplit: 8 }];
+  worksheet.views = [{ state: "frozen", xSplit: 3, ySplit: 3 }];
   worksheet.pageSetup = {
     orientation: "landscape",
     fitToPage: true,
@@ -357,14 +289,9 @@ function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
     ...Array.from({ length: 59 }, () => ({ width: 14 })),
   ];
 
-  worksheet.getRow(1).height = 24;
-  worksheet.getRow(2).height = 22;
-  worksheet.getRow(3).height = 20;
-  worksheet.getRow(4).height = 32;
-  worksheet.getRow(5).height = 20;
-  worksheet.getRow(6).height = 18;
-  worksheet.getRow(7).height = 42;
-  worksheet.getRow(8).height = 58;
+  worksheet.getRow(1).height = 18;
+  worksheet.getRow(2).height = 42;
+  worksheet.getRow(3).height = 58;
 
   for (const [startCell, endCell] of getWorksheetMerges()) {
     worksheet.mergeCells(`${startCell}:${endCell}`);
@@ -383,44 +310,36 @@ function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
       cell.border = thinBorder;
       cell.font = { name: "Arial", size: 10 };
 
-      if (rowNumber >= 9 && typeof cell.value === "number") {
+      if (rowNumber >= 4 && typeof cell.value === "number") {
         cell.numFmt = "#,##0";
       }
     });
   });
 
-  worksheet.getCell("B1").font = { name: "Arial", size: 13, bold: true };
-  worksheet.getCell("B1").alignment = { horizontal: "left", vertical: "middle" };
-  worksheet.getCell("B2").font = { name: "Arial", size: 10, italic: true, color: { argb: "FF475569" } };
-  worksheet.getCell("B2").alignment = { horizontal: "left", vertical: "middle" };
-  worksheet.getCell("B4").font = { name: "Arial", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
-  worksheet.getCell("B4").alignment = { horizontal: "center", vertical: "middle" };
-  worksheet.getCell("B4").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1D4ED8" } };
-
   for (let column = 1; column <= 66; column++) {
-    const numberCell = worksheet.getRow(6).getCell(column);
+    const numberCell = worksheet.getRow(1).getCell(column);
     numberCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
     numberCell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF1E3A8A" } };
 
-    for (const rowNumber of [7, 8]) {
+    for (const rowNumber of [2, 3]) {
       const cell = worksheet.getRow(rowNumber).getCell(column);
       cell.fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: rowNumber === 7 ? "FFDBEAFE" : "FFFFF7ED" },
+        fgColor: { argb: rowNumber === 2 ? "FFDBEAFE" : "FFFFF7ED" },
       };
       cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF0F172A" } };
     }
   }
 
-  for (let rowNumber = 9; rowNumber <= totalRows; rowNumber++) {
+  for (let rowNumber = 4; rowNumber <= totalRows; rowNumber++) {
     const row = worksheet.getRow(rowNumber);
-    const isDepartmentRow = typeof row.getCell(1).value === "string" && !String(row.getCell(2).value || "").match(/^\d|[A-Z0-9]+$/);
-    const fillColor = isDepartmentRow ? "FFE2E8F0" : rowNumber % 2 === 0 ? "FFFFFFFF" : "FFF8FAFC";
+    const isTotalRow = String(row.getCell(2).value || "").trim() === "TỔNG CỘNG";
+    const fillColor = isTotalRow ? "FFE2E8F0" : rowNumber % 2 === 0 ? "FFFFFFFF" : "FFF8FAFC";
 
     row.eachCell({ includeEmpty: true }, (cell) => {
       cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: fillColor } };
-      cell.font = { name: "Arial", size: 10, bold: isDepartmentRow, color: { argb: "FF0F172A" } };
+      cell.font = { name: "Arial", size: 10, bold: isTotalRow, color: { argb: "FF0F172A" } };
       cell.alignment = {
         vertical: "middle",
         horizontal: typeof cell.value === "number" ? "right" : "center",
@@ -428,15 +347,15 @@ function applyWorksheetLayout(worksheet: ExcelJS.Worksheet, totalRows: number) {
       };
     });
 
-    if (isDepartmentRow) {
+    if (isTotalRow) {
       row.height = 24;
       row.getCell(2).alignment = { vertical: "middle", horizontal: "left", wrapText: true };
     }
   }
 
   worksheet.autoFilter = {
-    from: { row: 8, column: 1 },
-    to: { row: 8, column: 66 },
+    from: { row: 3, column: 1 },
+    to: { row: 3, column: 66 },
   };
 }
 
@@ -493,8 +412,8 @@ export class PayrollExportService {
       [cycleId]
     );
 
-    const headerRows = buildTemplateRows(cycle);
-    const dataRows = buildGroupedPayrollRows(rows);
+    const headerRows = buildTemplateRows();
+    const dataRows = buildPayrollRows(rows);
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "CT Apparel";
     workbook.created = new Date();
@@ -507,7 +426,7 @@ export class PayrollExportService {
 
     return {
       buffer,
-      fileName: `bang-luong-${source === "audit" ? "audit-" : ""}${cycle.code}.xlsx`,
+      fileName: `bang-luong-${cycle.code}.xlsx`,
     };
   }
 }

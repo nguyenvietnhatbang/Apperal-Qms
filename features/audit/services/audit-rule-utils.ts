@@ -39,7 +39,9 @@ function normalizeText(value?: string | null) {
 
 export function isSundayWorkDate(workDate: string | Date, weekdayName?: string | null) {
   const normalizedWeekday = normalizeText(weekdayName);
-  if (sundayNames.has(normalizedWeekday)) return true;
+  // Imported PostgreSQL dates can be represented as the previous UTC day in
+  // Asia/Ho_Chi_Minh. When the source supplies a weekday, it is authoritative.
+  if (normalizedWeekday) return sundayNames.has(normalizedWeekday);
 
   const date = typeof workDate === "string" ? new Date(`${workDate}T00:00:00Z`) : workDate;
   return !Number.isNaN(date.getTime()) && date.getUTCDay() === 0;
@@ -47,13 +49,7 @@ export function isSundayWorkDate(workDate: string | Date, weekdayName?: string |
 
 export function reduceOvertimeToDailyRemainder(hours: number, dailyLimit: number) {
   if (hours <= 0 || dailyLimit <= 0) return 0;
-
-  let remainder = hours;
-  while (remainder > dailyLimit) {
-    remainder -= dailyLimit;
-  }
-
-  return Math.max(0, Number(remainder.toFixed(2)));
+  return Math.max(0, Number(Math.min(hours, dailyLimit).toFixed(2)));
 }
 
 export function auditDailyAttendance(input: AuditAttendanceInput, config: AuditRuleConfig): AuditAttendanceResult {
@@ -72,17 +68,12 @@ export function auditDailyAttendance(input: AuditAttendanceInput, config: AuditR
 
   const tier2Hours = config.enableOvertimeTier2 ? input.overtimeSundayHours : 0;
   const normalOvertimeSource = input.overtimeNormalHours + (config.enableOvertimeTier2 ? 0 : input.overtimeSundayHours);
-  const auditedNormalOvertime = reduceOvertimeToDailyRemainder(
-    normalOvertimeSource,
-    config.maxOvertimeHoursPerDay
-  );
+  // Keep approved daily OT from the raw import intact here. The payroll audit
+  // applies the configured monthly/yearly ceiling cumulatively afterwards.
+  const auditedNormalOvertime = normalOvertimeSource;
 
   if (!config.enableOvertimeTier2 && input.overtimeSundayHours > 0) {
     reasons.push("TC2 được đưa về TC1 vì audit không bật tăng ca 2.");
-  }
-
-  if (auditedNormalOvertime !== normalOvertimeSource) {
-    reasons.push(`TC1 audit còn ${auditedNormalOvertime}h sau khi trừ block ${config.maxOvertimeHoursPerDay}h/ngày.`);
   }
 
   return {

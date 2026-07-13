@@ -109,10 +109,11 @@ export class AuditService {
                   overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, symbol, extra_symbol, total_hours,
                   updated_at, created_at
            FROM attendance_records
-           WHERE work_date >= $1::date
-             AND work_date <= $2::date
+           WHERE payroll_cycle_id = $1
+             AND work_date >= $2::date
+             AND work_date <= $3::date
              AND employee_id IN (
-               SELECT id FROM employees WHERE factory_id = $3 AND deleted_at IS NULL
+               SELECT id FROM employees WHERE factory_id = $4 AND deleted_at IS NULL
              )
            ORDER BY COALESCE(employee_id::text, employee_code), work_date, updated_at DESC, created_at DESC, id DESC
          )
@@ -122,7 +123,7 @@ export class AuditService {
                 overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours, symbol, extra_symbol, total_hours
          FROM cycle_attendance
          ORDER BY employee_code ASC, work_date ASC`,
-        [cycle.period_start, cycle.period_end, cycle.factory_id]
+        [cycleId, cycle.period_start, cycle.period_end, cycle.factory_id]
       );
 
       await client.query(`DELETE FROM audit_payroll_items WHERE payroll_cycle_id = $1`, [cycleId]);
@@ -569,6 +570,114 @@ export class AuditService {
           );
         }
       }
+
+      // The audit changes attendance/OT only. Keep every non-OT supplement and
+      // approved deduction from the standard payroll snapshot of this cycle.
+      // This also intentionally ignores overtime_normal_hours_override: the
+      // audited hours above remain the source of truth for normal OT.
+      await client.query(
+        `UPDATE audit_payroll_items a
+         SET actual_workdays = p.actual_workdays,
+             paid_leave_days = p.paid_leave_days,
+             paid_leave_hours = p.paid_leave_hours,
+             annual_leave_total = p.annual_leave_total,
+             annual_leave_used_cumulative = p.annual_leave_used_cumulative,
+             annual_leave_remaining = p.annual_leave_remaining,
+             holiday_days = p.holiday_days,
+             personal_leave_days = p.personal_leave_days,
+             unpaid_leave_days = p.unpaid_leave_days,
+             night_shift_hours = p.night_shift_hours,
+             excess_overtime_normal_hours = p.excess_overtime_normal_hours,
+             excess_overtime_sunday_hours = p.excess_overtime_sunday_hours,
+             excess_overtime_holiday_hours = p.excess_overtime_holiday_hours,
+             monthly_salary_amount = p.monthly_salary_amount,
+             personal_leave_amount = p.personal_leave_amount,
+             paid_leave_amount = p.paid_leave_amount,
+             overtime_normal_amount = ROUND(
+               a.overtime_normal_hours *
+               COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                        NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                        (p.salary_config_snapshot->>'totalSalary')::numeric) /
+               $2::numeric / $3::numeric * $4::numeric
+             ),
+             overtime_sunday_amount = ROUND(
+               a.overtime_sunday_hours *
+               COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                        NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                        (p.salary_config_snapshot->>'totalSalary')::numeric) /
+               $2::numeric / $3::numeric * $5::numeric
+             ),
+             overtime_holiday_amount = p.overtime_holiday_amount,
+             night_shift_amount = p.night_shift_amount,
+             excess_overtime_normal_amount = p.excess_overtime_normal_amount,
+             excess_overtime_sunday_amount = p.excess_overtime_sunday_amount,
+             excess_overtime_holiday_amount = p.excess_overtime_holiday_amount,
+             allowance_amount = p.allowance_amount,
+             business_trip_allowance = p.business_trip_allowance,
+             compliance_bonus = p.compliance_bonus,
+             work_trip_support = p.work_trip_support,
+             menstrual_allowance_amount = p.menstrual_allowance_amount,
+             child_allowance_amount = p.child_allowance_amount,
+             company_insurance_amount = p.company_insurance_amount,
+             employee_insurance_amount = p.employee_insurance_amount,
+             union_fee_amount = p.union_fee_amount,
+             personal_income_tax_amount = p.personal_income_tax_amount,
+             advance_payment_1 = p.advance_payment_1,
+             advance_payment_2 = p.advance_payment_2,
+             pending_leave_advance = p.pending_leave_advance,
+             total_deduction = p.total_deduction,
+             gross_income = ROUND((
+               p.monthly_salary_amount + p.paid_leave_amount + p.overtime_holiday_amount + p.allowance_amount + ROUND(
+                 a.overtime_normal_hours *
+                 COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                          NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                          (p.salary_config_snapshot->>'totalSalary')::numeric) /
+                 $2::numeric / $3::numeric * $4::numeric
+               ) + ROUND(
+                 a.overtime_sunday_hours *
+                 COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                          NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                          (p.salary_config_snapshot->>'totalSalary')::numeric) /
+                 $2::numeric / $3::numeric * $5::numeric
+               )
+             ) / 1000) * 1000,
+             net_salary = ROUND((
+               p.monthly_salary_amount + p.paid_leave_amount + p.overtime_holiday_amount + p.allowance_amount + ROUND(
+                 a.overtime_normal_hours *
+                 COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                          NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                          (p.salary_config_snapshot->>'totalSalary')::numeric) /
+                 $2::numeric / $3::numeric * $4::numeric
+               ) + ROUND(
+                 a.overtime_sunday_hours *
+                 COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                          NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                          (p.salary_config_snapshot->>'totalSalary')::numeric) /
+                 $2::numeric / $3::numeric * $5::numeric
+               )
+             ) / 1000) * 1000 - p.total_deduction,
+             second_payment_amount = ROUND((ROUND((
+               p.monthly_salary_amount + p.paid_leave_amount + p.overtime_holiday_amount + p.allowance_amount + ROUND(
+                 a.overtime_normal_hours *
+                 COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                          NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                          (p.salary_config_snapshot->>'totalSalary')::numeric) /
+                 $2::numeric / $3::numeric * $4::numeric
+               ) + ROUND(
+                 a.overtime_sunday_hours *
+                 COALESCE(NULLIF((p.salary_config_snapshot->>'insuranceSalary')::numeric, 0),
+                          NULLIF((p.salary_config_snapshot->>'baseSalary')::numeric, 0),
+                          (p.salary_config_snapshot->>'totalSalary')::numeric) /
+                 $2::numeric / $3::numeric * $5::numeric
+               )
+             ) / 1000) * 1000 - p.total_deduction) / 1000) * 1000,
+             updated_at = now()
+         FROM payroll_items p
+         WHERE a.payroll_cycle_id = $1
+           AND p.payroll_cycle_id = a.payroll_cycle_id
+           AND p.employee_id = a.employee_id`,
+        [cycleId, stdWorkdays, stdHoursPerDay, otNormalRate, otSundayRate]
+      );
 
       await client.query(
         `INSERT INTO payroll_audit_logs (payroll_cycle_id, actor_user_id, action, payload)

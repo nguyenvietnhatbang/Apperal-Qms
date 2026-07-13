@@ -60,17 +60,23 @@ describe("payroll Excel export follows Bangluong.csv", () => {
       const worksheet = workbook.getWorksheet("2. BẢNG LƯƠNG");
       expect(worksheet).toBeTruthy();
 
-      const actualMain = Array.from({ length: 66 }, (_, index) => cellText(worksheet!.getRow(7).getCell(index + 1).value));
-      const actualSub = Array.from({ length: 66 }, (_, index) => cellText(worksheet!.getRow(8).getCell(index + 1).value));
+      expect(exported.fileName).toBe("bang-luong-2026-06.xlsx");
+      const actualMain = Array.from({ length: 66 }, (_, index) => cellText(worksheet!.getRow(2).getCell(index + 1).value));
+      const actualSub = Array.from({ length: 66 }, (_, index) => cellText(worksheet!.getRow(3).getCell(index + 1).value));
       const differences = [
         ...expectedMain.flatMap((expected, index) => expected && actualMain[index] !== expected
-          ? [{ row: 7, column: index + 1, expected, actual: actualMain[index] }]
+          ? [{ row: 2, column: index + 1, expected, actual: actualMain[index] }]
           : []),
         ...expectedSub.flatMap((expected, index) => expected && actualSub[index] !== expected
-          ? [{ row: 8, column: index + 1, expected, actual: actualSub[index] }]
+          ? [{ row: 3, column: index + 1, expected, actual: actualSub[index] }]
           : []),
       ];
       expect(differences).toEqual([]);
+      expect(cellText(worksheet!.getRow(1).getCell(1).value)).toBe("");
+      expect(cellText(worksheet!.getRow(1).getCell(2).value)).toBe("1");
+      expect(cellText(worksheet!.getRow(worksheet!.rowCount).getCell(2).value)).toBe("TỔNG CỘNG");
+      expect(Array.from({ length: worksheet!.rowCount }, (_, index) => cellText(worksheet!.getRow(index + 1).getCell(2).value)))
+        .not.toContain("CHƯA PHÂN LOẠI");
 
       let employeeRow: ExcelJS.Row | undefined;
       worksheet!.eachRow((row) => {

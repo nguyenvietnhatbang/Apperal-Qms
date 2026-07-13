@@ -14,10 +14,10 @@ const defaultConfig = {
 };
 
 describe("Audit overtime rules", () => {
-  test("reduces overtime by 4-hour blocks and keeps the remainder", () => {
-    expect(reduceOvertimeToDailyRemainder(9, 4)).toBe(1);
-    expect(reduceOvertimeToDailyRemainder(5, 4)).toBe(1);
-    expect(reduceOvertimeToDailyRemainder(4.5, 4)).toBe(0.5);
+  test("clamps a standalone overtime value to the supplied limit", () => {
+    expect(reduceOvertimeToDailyRemainder(9, 4)).toBe(4);
+    expect(reduceOvertimeToDailyRemainder(5, 4)).toBe(4);
+    expect(reduceOvertimeToDailyRemainder(4.5, 4)).toBe(4);
     expect(reduceOvertimeToDailyRemainder(4, 4)).toBe(4);
   });
 
@@ -34,7 +34,7 @@ describe("Audit overtime rules", () => {
       defaultConfig
     );
 
-    expect(result.overtimeNormalHours).toBe(1);
+    expect(result.overtimeNormalHours).toBe(5);
     expect(result.overtimeSundayHours).toBe(0);
   });
 
