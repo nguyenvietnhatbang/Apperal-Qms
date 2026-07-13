@@ -33,13 +33,18 @@ export class PayrollCalculationService {
       const empInsRate = rules["employee_insurance_rate"] || 0.105;
       const empUnionRate = rules["employee_union_rate"] || 0.01;
 
-      // 3. Fetch all active employees
+      // 3. Only calculate employees who actually have attendance in this cycle.
+      // Employees missing from the raw import are intentionally skipped.
       const employeesRes = await client.query(
         `SELECT id, employee_code, full_name, gender, status, dependent_count, has_child_under_6 
-         FROM employees 
-         WHERE deleted_at IS NULL AND status = 'active' AND factory_id = $1
+         FROM employees e
+         WHERE e.deleted_at IS NULL AND e.status = 'active' AND e.factory_id = $1
+           AND EXISTS (
+             SELECT 1 FROM attendance_records ar
+             WHERE ar.payroll_cycle_id = $2 AND ar.employee_id = e.id
+           )
          ORDER BY employee_code ASC`,
-        [cycle.factory_id]
+        [cycle.factory_id, cycleId]
       );
       const employees = employeesRes.rows;
       const employeeIds = employees.map((employee: any) => employee.id);
@@ -78,9 +83,10 @@ export class PayrollCalculationService {
                       employee_id, work_date, symbol, workday_count,
                       overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours
                FROM attendance_records
-               WHERE employee_id = ANY($1::uuid[])
-                 AND work_date >= $2::date
-                 AND work_date <= $3::date
+               WHERE payroll_cycle_id = $1
+                 AND employee_id = ANY($2::uuid[])
+                 AND work_date >= $3::date
+                 AND work_date <= $4::date
                ORDER BY employee_id, work_date, updated_at DESC, created_at DESC, id DESC
              )
              SELECT employee_id as "employeeId",
@@ -112,7 +118,7 @@ export class PayrollCalculationService {
                     COALESCE(SUM(overtime_holiday_hours), 0) as "overtimeHolidayHours"
              FROM cycle_attendance
              GROUP BY employee_id`,
-            [employeeIds, periodStartStr, periodEndStr]
+            [cycleId, employeeIds, periodStartStr, periodEndStr]
           )
         : { rows: [] };
       const attendanceTotalsByEmployeeId = new Map<string, any>(
@@ -145,8 +151,10 @@ export class PayrollCalculationService {
                     advance_payment_1 as "advancePayment1",
                     advance_payment_2 as "advancePayment2",
                     pending_leave_advance as "pendingLeaveAdvance",
+                    other_allowance_amount as "otherAllowanceAmount",
                     actual_workdays_override as "actualWorkdaysOverride",
                     paid_leave_days_override as "paidLeaveDaysOverride",
+                    unpaid_leave_days_override as "unpaidLeaveDaysOverride",
                     holiday_days_override as "holidayDaysOverride",
                     overtime_normal_hours_override as "overtimeNormalHoursOverride",
                     overtime_sunday_hours_override as "overtimeSundayHoursOverride",
@@ -199,7 +207,9 @@ export class PayrollCalculationService {
         const holidayDays = adjustment.holidayDaysOverride === null || adjustment.holidayDaysOverride === undefined
           ? parseFloat(attendanceTotals?.holidayDays || 0)
           : parseFloat(adjustment.holidayDaysOverride);
-        const unpaidLeaveDays = parseFloat(attendanceTotals?.unpaidLeaveDays || 0);
+        const unpaidLeaveDays = adjustment.unpaidLeaveDaysOverride === null || adjustment.unpaidLeaveDaysOverride === undefined
+          ? parseFloat(attendanceTotals?.unpaidLeaveDays || 0)
+          : parseFloat(adjustment.unpaidLeaveDaysOverride);
         const overtimeNormalHours = adjustment.overtimeNormalHoursOverride === null || adjustment.overtimeNormalHoursOverride === undefined
           ? parseFloat(attendanceTotals?.overtimeNormalHours || 0)
           : parseFloat(adjustment.overtimeNormalHoursOverride);
@@ -220,6 +230,7 @@ export class PayrollCalculationService {
         const workTripSupport = parseFloat(adjustment.workTripSupport || 0);
         const nightShiftHours = parseFloat(adjustment.nightShiftHours || 0);
         const nightShiftAmount = parseFloat(adjustment.nightShiftAmount || 0);
+        const otherAllowanceAmount = parseFloat(adjustment.otherAllowanceAmount || 0);
         const excessOvertimeNormalHours = parseFloat(adjustment.excessOvertimeNormalHours || 0);
         const excessOvertimeSundayHours = parseFloat(adjustment.excessOvertimeSundayHours || 0);
         const excessOvertimeHolidayHours = parseFloat(adjustment.excessOvertimeHolidayHours || 0);
@@ -287,7 +298,7 @@ export class PayrollCalculationService {
         // Total allowances flat (excluding pro-rated allowances which are built into total_salary)
         // Seniority allowance is paid flat on top as observed in the template sheet
         const flatAllowanceAmount = payrollExcluded ? 0 : seniorityAllowance + menstrualAllowance + childAllowance +
-          businessTripAllowance + complianceBonus + workTripSupport + nightShiftAmount;
+          businessTripAllowance + complianceBonus + workTripSupport + nightShiftAmount + otherAllowanceAmount;
 
         // The source payroll sheet keeps personal leave/BH as a separate informational
         // amount and does not include it in total income. Its total income is rounded
@@ -394,6 +405,7 @@ export class PayrollCalculationService {
           excessOvertimeSundayAmount,
           excessOvertimeHolidayAmount,
           allowanceAmount: flatAllowanceAmount,
+          otherAllowanceAmount,
           businessTripAllowance,
           complianceBonus,
           workTripSupport,
@@ -438,6 +450,9 @@ export class PayrollCalculationService {
         if (childAllowance > 0) {
           lines.push({ code: "phu_cap_con_nho", name: `PC con nhỏ < 6 tuổi (${emp.dependent_count || 1} con)`, qty: emp.dependent_count || 1, rate: 100000, amount: childAllowance, type: "allowance", order: 80 });
         }
+        if (otherAllowanceAmount > 0 && !payrollExcluded) {
+          lines.push({ code: "phu_cap_ngoai", name: "Phụ cấp ngoài", qty: 1, rate: otherAllowanceAmount, amount: otherAllowanceAmount, type: "allowance", order: 90 });
+        }
 
         // Deductions lines
         lines.push(
@@ -462,7 +477,7 @@ export class PayrollCalculationService {
              excess_overtime_sunday_hours, excess_overtime_holiday_hours, monthly_salary_amount, personal_leave_amount,
              paid_leave_amount, overtime_normal_amount, overtime_sunday_amount, overtime_holiday_amount,
              night_shift_amount, excess_overtime_normal_amount, excess_overtime_sunday_amount, excess_overtime_holiday_amount,
-             allowance_amount, business_trip_allowance, compliance_bonus, work_trip_support,
+             allowance_amount, other_allowance_amount, business_trip_allowance, compliance_bonus, work_trip_support,
              menstrual_allowance_amount, child_allowance_amount, gross_income,
              company_insurance_amount, employee_insurance_amount,
              union_fee_amount, personal_income_tax_amount, advance_payment_1, advance_payment_2, pending_leave_advance, total_deduction,
@@ -476,7 +491,7 @@ export class PayrollCalculationService {
              "excessOvertimeSundayHours", "excessOvertimeHolidayHours", "monthlySalaryAmount", "personalLeaveAmount",
              "paidLeaveAmount", "overtimeNormalAmount", "overtimeSundayAmount", "overtimeHolidayAmount",
              "nightShiftAmount", "excessOvertimeNormalAmount", "excessOvertimeSundayAmount", "excessOvertimeHolidayAmount",
-             "allowanceAmount", "businessTripAllowance", "complianceBonus", "workTripSupport",
+             "allowanceAmount", "otherAllowanceAmount", "businessTripAllowance", "complianceBonus", "workTripSupport",
              "menstrualAllowanceAmount", "childAllowanceAmount", "grossIncome",
              "companyInsuranceAmount", "employeeInsuranceAmount",
              "unionFeeAmount", "personalIncomeTaxAmount", "advancePayment1", "advancePayment2", "pendingLeaveAdvance", "totalDeduction",
@@ -514,6 +529,7 @@ export class PayrollCalculationService {
              "excessOvertimeSundayAmount" numeric,
              "excessOvertimeHolidayAmount" numeric,
              "allowanceAmount" numeric,
+             "otherAllowanceAmount" numeric,
              "businessTripAllowance" numeric,
              "complianceBonus" numeric,
              "workTripSupport" numeric,

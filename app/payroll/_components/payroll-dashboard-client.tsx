@@ -1058,6 +1058,12 @@ export default function PayrollDashboardClient({
     )));
   };
 
+  const updateOptionalAdjustmentValue = (employeeId: string, key: string, value: string) => {
+    setPayrollAdjustments((current) => current.map((item) => (
+      item.employeeId === employeeId ? { ...item, [key]: value === "" ? null : Number(value) } : item
+    )));
+  };
+
   const savePayrollAdjustment = async (adjustment: any) => {
     if (!selectedCycleId) return;
     try {
@@ -2469,6 +2475,18 @@ export default function PayrollDashboardClient({
                   className={inputClass}
                 />
               );
+              const renderOptionalNumberInput = (item: any, key: string) => (
+                <input
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={item[key] ?? ""}
+                  placeholder="Theo raw"
+                  title="Để trống để tự động lấy từ dữ liệu chấm công/công thức tính lương"
+                  onChange={(event) => updateOptionalAdjustmentValue(item.employeeId, key, event.target.value)}
+                  className={`${inputClass} placeholder:text-zinc-400 placeholder:font-medium`}
+                />
+              );
 
               return (
                 <>
@@ -2512,7 +2530,7 @@ export default function PayrollDashboardClient({
                           className="pl-10 pr-4 py-2 bg-white border border-zinc-250 rounded-xl text-sm w-60 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
                         />
                       </div>
-                      <span className="text-xs font-semibold text-zinc-500">Chỉ nhập khoản phát sinh; công, phép và tăng ca lấy từ chấm công.</span>
+                      <span className="text-xs font-semibold text-zinc-500">Các ô “Theo raw” để trống sẽ tự lấy từ chấm công/công thức; nhập số để ghi đè.</span>
                     </div>
                     <button
                       onClick={() => selectedCycleId && handleCalculatePayroll(selectedCycleId)}
@@ -2525,11 +2543,20 @@ export default function PayrollDashboardClient({
                   </div>
 
                   <div className="flex-1 overflow-auto min-h-0">
-                    <table className="w-full min-w-[2300px] text-left border-collapse text-sm">
+                    <table className="w-full min-w-[3900px] text-left border-collapse text-sm">
                       <thead>
                         <tr className="bg-zinc-50 text-zinc-500 font-bold uppercase tracking-wider whitespace-nowrap">
                           <th className="px-4 py-3.5 sticky top-0 left-0 bg-zinc-50 border-b border-zinc-200 z-30 min-w-[90px]">Mã NV</th>
                           <th className="px-4 py-3.5 sticky top-0 left-[90px] bg-zinc-50 border-b border-zinc-200 z-30 min-w-[170px]">Họ tên</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Công đúng</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Nghỉ tính lương</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Nghỉ không lương</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Ngày lễ đúng</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT thường đúng</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT CN đúng</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">OT lễ đúng</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Thuế phát sinh</th>
+                          <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phụ cấp ngoài</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Tổng phép</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Giờ PN</th>
                           <th className="px-4 py-3.5 sticky top-0 bg-zinc-50 border-b border-zinc-200 z-20">Phép cộng dồn</th>
@@ -2548,13 +2575,22 @@ export default function PayrollDashboardClient({
                       <tbody className="divide-y divide-zinc-100 text-zinc-750">
                         {paginatedAdjustments.length === 0 ? (
                           <tr>
-                            <td colSpan={15} className="px-4 py-8 text-center text-zinc-400">Chưa có nhân viên hoặc chưa chọn chu kỳ.</td>
+                            <td colSpan={24} className="px-4 py-8 text-center text-zinc-400">Chưa có nhân viên hoặc chưa chọn chu kỳ.</td>
                           </tr>
                         ) : (
                           paginatedAdjustments.map((item) => (
                             <tr key={item.employeeId} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
                               <td className="px-4 py-3 sticky left-0 bg-white font-mono font-bold text-zinc-700 z-20">{item.employeeCode}</td>
                               <td className="px-4 py-3 sticky left-[90px] bg-white font-bold text-zinc-800 z-20">{item.employeeName}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "actualWorkdaysOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "paidLeaveDaysOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "unpaidLeaveDaysOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "holidayDaysOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeNormalHoursOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeSundayHoursOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "overtimeHolidayHoursOverride")}</td>
+                              <td className="px-3 py-2">{renderOptionalNumberInput(item, "personalIncomeTaxAmountOverride")}</td>
+                              <td className="px-3 py-2">{renderNumberInput(item, "otherAllowanceAmount")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveTotal")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "paidLeaveHours")}</td>
                               <td className="px-3 py-2">{renderNumberInput(item, "annualLeaveUsedCumulative")}</td>

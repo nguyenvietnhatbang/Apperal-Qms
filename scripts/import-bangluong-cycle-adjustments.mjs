@@ -106,10 +106,15 @@ async function main() {
     if (["locked", "paid"].includes(cycle.status)) throw new Error("Không thể cập nhật chu kỳ đã khóa hoặc đã chi trả.");
 
     const employeesResult = await client.query(
-      `SELECT e.id, e.employee_code, e.full_name
+      `SELECT e.id, e.employee_code, e.full_name,
+              EXISTS (
+                SELECT 1
+                FROM attendance_records ar
+                WHERE ar.payroll_cycle_id = $2 AND ar.employee_id = e.id
+              ) AS has_attendance
        FROM employees e
        WHERE e.factory_id = $1 AND e.deleted_at IS NULL AND e.status = 'active'`,
-      [factory.id]
+      [factory.id, cycle.id]
     );
     const employeeByCode = new Map(employeesResult.rows.map((employee) => [cleanText(employee.employee_code), employee]));
     const employeeByName = new Map(employeesResult.rows.map((employee) => [normalizeName(employee.full_name), employee]));
@@ -117,7 +122,7 @@ async function main() {
     const skippedRows = [];
     for (const row of sourceRows) {
       const employee = employeeByCode.get(row.employeeCode) || employeeByName.get(normalizeName(row.fullName));
-      if (employee) matchedRows.push({ ...row, employeeId: employee.id });
+      if (employee?.has_attendance) matchedRows.push({ ...row, employeeId: employee.id });
       else skippedRows.push(row.fullName);
     }
 
@@ -130,6 +135,15 @@ async function main() {
     }
 
     await client.query("BEGIN");
+    await client.query(
+      `DELETE FROM payroll_adjustments pa
+       WHERE pa.payroll_cycle_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM attendance_records ar
+           WHERE ar.payroll_cycle_id = $1 AND ar.employee_id = pa.employee_id
+         )`,
+      [cycle.id]
+    );
     for (const row of matchedRows) {
       await client.query(
         `INSERT INTO payroll_adjustments (
@@ -139,13 +153,14 @@ async function main() {
            excess_overtime_normal_hours, excess_overtime_sunday_hours, excess_overtime_holiday_hours,
            excess_overtime_normal_amount, excess_overtime_sunday_amount, excess_overtime_holiday_amount,
            advance_payment_1, advance_payment_2, pending_leave_advance,
-           actual_workdays_override, paid_leave_days_override, holiday_days_override,
+           other_allowance_amount, actual_workdays_override, paid_leave_days_override,
+           unpaid_leave_days_override, holiday_days_override,
            overtime_normal_hours_override, overtime_sunday_hours_override, overtime_holiday_hours_override,
            employee_insurance_amount_override, union_fee_amount_override, personal_income_tax_amount_override,
            menstrual_allowance_amount_override, child_allowance_amount_override, payroll_excluded, note
          ) VALUES (
            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-           $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
+           $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37
          ) ON CONFLICT (payroll_cycle_id, employee_id) DO UPDATE SET
            annual_leave_total = EXCLUDED.annual_leave_total, paid_leave_hours = EXCLUDED.paid_leave_hours,
            annual_leave_used_cumulative = EXCLUDED.annual_leave_used_cumulative, annual_leave_remaining = EXCLUDED.annual_leave_remaining,
@@ -156,8 +171,11 @@ async function main() {
            excess_overtime_holiday_hours = EXCLUDED.excess_overtime_holiday_hours, excess_overtime_normal_amount = EXCLUDED.excess_overtime_normal_amount,
            excess_overtime_sunday_amount = EXCLUDED.excess_overtime_sunday_amount, excess_overtime_holiday_amount = EXCLUDED.excess_overtime_holiday_amount,
            advance_payment_1 = EXCLUDED.advance_payment_1, advance_payment_2 = EXCLUDED.advance_payment_2,
-           pending_leave_advance = EXCLUDED.pending_leave_advance, actual_workdays_override = EXCLUDED.actual_workdays_override,
-           paid_leave_days_override = EXCLUDED.paid_leave_days_override, holiday_days_override = EXCLUDED.holiday_days_override,
+           pending_leave_advance = EXCLUDED.pending_leave_advance, other_allowance_amount = EXCLUDED.other_allowance_amount,
+           actual_workdays_override = EXCLUDED.actual_workdays_override,
+           paid_leave_days_override = EXCLUDED.paid_leave_days_override,
+           unpaid_leave_days_override = EXCLUDED.unpaid_leave_days_override,
+           holiday_days_override = EXCLUDED.holiday_days_override,
            overtime_normal_hours_override = EXCLUDED.overtime_normal_hours_override, overtime_sunday_hours_override = EXCLUDED.overtime_sunday_hours_override,
            overtime_holiday_hours_override = EXCLUDED.overtime_holiday_hours_override, employee_insurance_amount_override = EXCLUDED.employee_insurance_amount_override,
            union_fee_amount_override = EXCLUDED.union_fee_amount_override, personal_income_tax_amount_override = EXCLUDED.personal_income_tax_amount_override,
@@ -170,8 +188,9 @@ async function main() {
           row.personalLeaveDays, row.personalLeaveAmount, row.businessTripAllowance, row.complianceBonus, row.workTripSupport,
           row.nightShiftHours, row.nightShiftAmount, row.excessOvertimeNormalHours, row.excessOvertimeSundayHours,
           row.excessOvertimeHolidayHours, row.excessOvertimeNormalAmount, row.excessOvertimeSundayAmount, row.excessOvertimeHolidayAmount,
-          row.advancePayment1, row.advancePayment2, row.pendingLeaveAdvance, row.actualWorkdaysOverride, row.paidLeaveDaysOverride,
-          row.holidayDaysOverride, row.overtimeNormalHoursOverride, row.overtimeSundayHoursOverride, row.overtimeHolidayHoursOverride,
+          row.advancePayment1, row.advancePayment2, row.pendingLeaveAdvance, 0,
+          row.actualWorkdaysOverride, row.paidLeaveDaysOverride, null, row.holidayDaysOverride,
+          row.overtimeNormalHoursOverride, row.overtimeSundayHoursOverride, row.overtimeHolidayHoursOverride,
           row.employeeInsuranceAmountOverride, row.unionFeeAmountOverride, row.personalIncomeTaxAmountOverride,
           row.menstrualAllowanceAmountOverride, row.childAllowanceAmountOverride,
           row.payrollExcluded,

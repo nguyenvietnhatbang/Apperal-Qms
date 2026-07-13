@@ -277,8 +277,10 @@ CREATE TABLE IF NOT EXISTS payroll_adjustments (
   advance_payment_1 numeric(14,2) NOT NULL DEFAULT 0,
   advance_payment_2 numeric(14,2) NOT NULL DEFAULT 0,
   pending_leave_advance numeric(14,2) NOT NULL DEFAULT 0,
+  other_allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
   actual_workdays_override numeric(8,2),
   paid_leave_days_override numeric(8,2),
+  unpaid_leave_days_override numeric(8,2),
   holiday_days_override numeric(8,2),
   overtime_normal_hours_override numeric(8,2),
   overtime_sunday_hours_override numeric(8,2),
@@ -330,6 +332,7 @@ CREATE TABLE IF NOT EXISTS payroll_items (
   excess_overtime_sunday_amount numeric(14,2) NOT NULL DEFAULT 0,
   excess_overtime_holiday_amount numeric(14,2) NOT NULL DEFAULT 0,
   allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
+  other_allowance_amount numeric(14,2) NOT NULL DEFAULT 0,
   business_trip_allowance numeric(14,2) NOT NULL DEFAULT 0,
   compliance_bonus numeric(14,2) NOT NULL DEFAULT 0,
   work_trip_support numeric(14,2) NOT NULL DEFAULT 0,
@@ -537,9 +540,12 @@ ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS work_trip_support numeric(14,
 ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS menstrual_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
 ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS child_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
 ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS pending_leave_advance numeric(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE payroll_items ADD COLUMN IF NOT EXISTS other_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
 
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS actual_workdays_override numeric(8,2);
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS paid_leave_days_override numeric(8,2);
+ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS unpaid_leave_days_override numeric(8,2);
+ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS other_allowance_amount numeric(14,2) NOT NULL DEFAULT 0;
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS holiday_days_override numeric(8,2);
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS overtime_normal_hours_override numeric(8,2);
 ALTER TABLE payroll_adjustments ADD COLUMN IF NOT EXISTS overtime_sunday_hours_override numeric(8,2);

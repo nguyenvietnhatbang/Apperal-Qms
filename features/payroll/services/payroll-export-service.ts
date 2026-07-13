@@ -72,10 +72,10 @@ function buildTemplateRows(cycle: any) {
 
   mainHeader[14] = "Các khoản thưởng và hỗ trợ";
   subHeader[14] = "Điện thoại";
-  subHeader[15] = "PC khác\n( Thưởng)";
+  subHeader[15] = "PC khác \n( Thưởng)";
   subHeader[16] = "Thưởng tuân thủ";
   subHeader[17] = "Công tác";
-  subHeader[18] = "Đi lại\n(Xăng xe)";
+  subHeader[18] = "Đi lại \n(Xăng xe)";
   subHeader[19] = "Nhà ở";
   subHeader[20] = "Chuyên cần";
 
@@ -84,54 +84,54 @@ function buildTemplateRows(cycle: any) {
   subHeader[22] = "Phép sd trong\ntháng";
   subHeader[23] = "Số giờ PN";
   subHeader[24] = "Phép đã\nsd cộng dồn";
-  subHeader[25] = "Phép\ncòn lại";
-  subHeader[26] = "Nghỉ\nviệc riêng";
+  subHeader[25] = "Phép \ncòn lại";
+  subHeader[26] = "Nghỉ \nviệc riêng/BH";
 
-  mainHeader[27] = "Ngày Lễ";
-  mainHeader[28] = "Tổng Ngày công làm việc";
-  mainHeader[29] = "TỔNG TG T.CA";
-  subHeader[29] = "Ngày thường";
-  subHeader[30] = "ngày CN";
-  subHeader[31] = "Ngày lễ tết";
+  mainHeader[27] = "Lương việc riêng, BH";
+  mainHeader[28] = "Ngày Lễ";
+  mainHeader[29] = "Tổng Ngày công làm việc";
+  mainHeader[30] = "TỔNG TG T.CA";
+  subHeader[30] = "Ngày thường";
+  subHeader[31] = "ngày CN";
+  subHeader[32] = "Ngày lễ tết";
 
-  mainHeader[32] = "Các khoản Công ty trích đóng";
-  subHeader[32] = "BHXH\n17.5% cty trả";
-  subHeader[33] = "BHYT 3%\nCty trả";
-  subHeader[34] = "BHTN 1%\nCty trả";
-  subHeader[35] = "CÔNG ĐOÀN\n2%";
+  mainHeader[33] = "Các khoản Công ty trích đóng";
+  subHeader[33] = "BHXH \n17.5% cty trả";
+  subHeader[34] = "BHYT 3%\nCty trả";
+  subHeader[35] = "BHTN 1%\nCty trả";
+  subHeader[36] = "CÔNG ĐOÀN\n2%";
 
-  mainHeader[36] = "Lương\ntháng ngày";
-  mainHeader[37] = "Hỗ trợ";
-  subHeader[37] = "Phụ cấp phí Ctác";
-  subHeader[38] = "Ngày hành kinh PN/ 1,5h";
-  subHeader[39] = "Con nhỏ\n < 6 tuổi";
+  mainHeader[37] = "Lương\ntháng ngày";
+  mainHeader[38] = "Hỗ trợ";
+  subHeader[38] = "Phụ cấp phí Ctác";
+  subHeader[39] = "Ngày hành kinh PN/ 1,5h";
+  subHeader[40] = "Con nhỏ\n < 6 tuổi";
 
-  mainHeader[40] = "Tiền tăng ca";
-  subHeader[40] = "Tăng ca ngày thường 150%";
-  subHeader[41] = "Tăng ca CN 200%";
-  subHeader[42] = "Tăng ca ngày lễ 300%";
+  mainHeader[41] = "Tiền tăng ca";
+  subHeader[41] = "Tăng ca ngày thường 150%";
+  subHeader[42] = "Tăng ca CN 200%";
+  subHeader[43] = "Tăng ca ngày lễ 300%";
 
-  mainHeader[43] = "Lương Phép, Lễ";
-  mainHeader[44] = "Tổng thu nhập";
-  mainHeader[45] = "Các khoản khấu trừ lương";
-  subHeader[45] = "Khấu trừ BHXH 10,5%";
-  subHeader[46] = "Đoàn phí";
-  subHeader[47] = "Số người PT";
-  subHeader[48] = "Thu nhập chịu thuế";
-  subHeader[49] = "Thuế TNCN";
+  mainHeader[44] = "Lương Phép, Lễ";
+  mainHeader[45] = "Tổng thu nhập";
+  mainHeader[46] = "Các khoản khấu trừ lương";
+  subHeader[46] = "Khấu trừ BHXH 10,5%";
+  subHeader[47] = "Đoàn phí";
+  subHeader[48] = "Số người PT";
+  subHeader[49] = "Thu nhập chịu thuế";
+  subHeader[50] = "Thuế TNCN";
 
-  mainHeader[50] = "Lương thực nhận";
-  mainHeader[51] = "Lương ứng đợt 1";
-  mainHeader[52] = "Lương ứng đợt 2";
-  mainHeader[53] = "Tiền lương còn lại";
-  mainHeader[54] = "Chữ ký Nhân Viên";
-  mainHeader[55] = "Số giờ OT thường vượt";
-  mainHeader[56] = "Sồ giờ OT chủ nhật";
-  mainHeader[57] = "Số giờ OT lễ";
-  mainHeader[58] = "Làm đêm";
+  mainHeader[51] = "Lương thực nhận";
+  mainHeader[52] = "Lương ứng đợt 1";
+  mainHeader[53] = "Lương ứng đợt 2";
+  mainHeader[54] = "Tiền lương còn lại";
+  mainHeader[55] = "Chữ ký Nhân Viên";
+  mainHeader[56] = "Số giờ OT thường vượt";
+  mainHeader[57] = "Sồ giờ OT chủ nhật";
+  mainHeader[58] = "Số giờ OT lễ";
   mainHeader[59] = "Làm đêm";
   mainHeader[60] = "Lương OT vượt thường";
-  mainHeader[61] = "Lương OT CN";
+  mainHeader[61] = "Lương OT  CN";
   mainHeader[62] = "Lương OT Lễ";
   mainHeader[63] = "Lương làm đêm";
   mainHeader[64] = "Tổng chi lần 2";
@@ -147,11 +147,11 @@ function getWorksheetMerges() {
     ["K7", "N7"],
     ["O7", "U7"],
     ["V7", "AA7"],
-    ["AD7", "AF7"],
-    ["AG7", "AJ7"],
-    ["AL7", "AN7"],
-    ["AO7", "AQ7"],
-    ["AT7", "AX7"],
+    ["AE7", "AG7"],
+    ["AH7", "AK7"],
+    ["AM7", "AO7"],
+    ["AP7", "AR7"],
+    ["AU7", "AY7"],
     ...[
       "A",
       "B",
@@ -163,10 +163,10 @@ function getWorksheetMerges() {
       "J",
       "AB",
       "AC",
-      "AK",
-      "AR",
+      "AD",
+      "AL",
       "AS",
-      "AY",
+      "AT",
       "AZ",
       "BA",
       "BB",
@@ -289,8 +289,8 @@ function buildPayrollRow(row: any, index: number) {
     toNumber(row.secondPaymentAmount),
     "",
     toNumber(row.excessOvertimeNormalHours),
-    toNumber(row.overtimeSundayHours),
-    toNumber(row.overtimeHolidayHours),
+    toNumber(row.excessOvertimeSundayHours),
+    toNumber(row.excessOvertimeHolidayHours),
     toNumber(row.nightShiftHours),
     toNumber(row.excessOvertimeNormalAmount),
     toNumber(row.excessOvertimeSundayAmount),

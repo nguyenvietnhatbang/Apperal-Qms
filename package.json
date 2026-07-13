@@ -11,7 +11,9 @@
     "init:admin": "node scripts/init-admin.mjs",
     "import:bangluong": "node scripts/import-bangluong-csv.mjs",
     "import:chamcong": "node scripts/import-chamcong-csv.mjs",
-    "import:bangluong-cycle": "node scripts/import-bangluong-cycle-adjustments.mjs"
+    "import:bangluong-cycle": "node scripts/import-bangluong-cycle-adjustments.mjs",
+    "compare:raw-payroll": "RUN_RAW_PAYROLL_COMPARISON=1 vitest run scripts/run-raw-payroll-comparison.test.ts --reporter=verbose",
+    "compare:adjusted-payroll": "RUN_ADJUSTED_PAYROLL_COMPARISON=1 vitest run scripts/run-adjusted-payroll-comparison.test.ts --reporter=verbose"
   },
   "dependencies": {
     "csv-parse": "^7.0.0",
