@@ -182,6 +182,14 @@ body {
     gap: 0.5rem;
   }
 
+  .dashboard-shell.mobile-filters-closed .flex.flex-wrap.items-center.justify-between > .flex:first-child {
+    display: none;
+  }
+
+  .dashboard-shell.mobile-filters-closed .flex.flex-wrap.items-center.justify-between:has(> .flex:only-child) {
+    display: none;
+  }
+
   .dashboard-shell .flex.flex-wrap.items-center.justify-between input,
   .dashboard-shell .flex.flex-wrap.items-center.justify-between select,
   .dashboard-shell .flex.flex-wrap.items-center.justify-between button {
