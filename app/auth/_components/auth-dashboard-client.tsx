@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Users, Shield, LayoutGrid, LogOut, Plus, Search, 
@@ -15,6 +15,7 @@ interface AuthDashboardClientProps {
   initialDepartments: any[];
   initialUsers: any[];
   initialFactories: any[];
+  initialDepartmentsByFactory: Record<string, any[]>;
   modules: any[];
 }
 
@@ -23,6 +24,7 @@ export default function AuthDashboardClient({
   initialDepartments,
   initialUsers,
   initialFactories,
+  initialDepartmentsByFactory,
   modules,
 }: AuthDashboardClientProps) {
   const router = useRouter();
@@ -32,11 +34,10 @@ export default function AuthDashboardClient({
   const [users, setUsers] = useState(initialUsers);
   const [factories, setFactories] = useState(initialFactories);
   const [selectedFactoryId, setSelectedFactoryId] = useState(currentUser.factoryId);
-  const [departmentsByFactory, setDepartmentsByFactory] = useState<Record<string, any[]>>({
-    [currentUser.factoryId]: initialDepartments,
-  });
+  const [departmentsByFactory, setDepartmentsByFactory] = useState<Record<string, any[]>>(initialDepartmentsByFactory);
   const [searchTerm, setSearchTerm] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const hasSkippedInitialRefresh = useRef(false);
 
   // Pagination & Custom Filters State
   const [pageUsers, setPageUsers] = useState(1);
@@ -96,27 +97,34 @@ export default function AuthDashboardClient({
   const refreshData = async (factoryId = selectedFactoryId) => {
     setIsLoading(true);
     try {
-      const queryString = currentUser.isSystemAdmin ? `?factoryId=${factoryId}` : "";
-      const uRes = await fetch(currentUser.isSystemAdmin ? "/api/admin/users" : `/api/admin/users${queryString}`);
-      const uData = await uRes.json();
-      if (uData.success) setUsers(uData.data);
+      const isSystemAdmin = currentUser.isSystemAdmin;
+      const [usersResponse, departmentsResponse, factoriesResponse] = await Promise.all([
+        fetch(isSystemAdmin ? "/api/admin/users" : `/api/admin/users?factoryId=${encodeURIComponent(factoryId)}`),
+        fetch(isSystemAdmin ? "/api/admin/departments?allFactories=true" : `/api/admin/departments?factoryId=${encodeURIComponent(factoryId)}`),
+        isSystemAdmin ? fetch("/api/admin/factories") : Promise.resolve(null),
+      ]);
+      const [usersData, departmentsData, factoriesData] = await Promise.all([
+        usersResponse.json(),
+        departmentsResponse.json(),
+        factoriesResponse?.json() ?? Promise.resolve(null),
+      ]);
 
-      const dRes = await fetch(`/api/admin/departments${queryString}`);
-      const dData = await dRes.json();
-      if (dData.success) setDepartments(dData.data);
+      if (usersData.success) setUsers(usersData.data);
+      if (factoriesData?.success) setFactories(factoriesData.data);
 
-      if (currentUser.isSystemAdmin) {
-        const fRes = await fetch("/api/admin/factories");
-        const fData = await fRes.json();
-        if (fData.success) {
-          setFactories(fData.data);
-          const nextDepartmentsByFactory: Record<string, any[]> = {};
-          for (const factory of fData.data) {
-            const deptRes = await fetch(`/api/admin/departments?factoryId=${factory.id}`);
-            const deptData = await deptRes.json();
-            if (deptData.success) nextDepartmentsByFactory[factory.id] = deptData.data;
-          }
+      if (departmentsData.success) {
+        if (isSystemAdmin) {
+          const nextDepartmentsByFactory: Record<string, any[]> = departmentsData.data.reduce((result: Record<string, any[]>, department: any) => {
+            const departmentFactoryId = department.factory_id;
+            if (!result[departmentFactoryId]) result[departmentFactoryId] = [];
+            result[departmentFactoryId].push(department);
+            return result;
+          }, {} as Record<string, any[]>);
           setDepartmentsByFactory(nextDepartmentsByFactory);
+          setDepartments(nextDepartmentsByFactory[factoryId] || []);
+        } else {
+          setDepartments(departmentsData.data);
+          setDepartmentsByFactory({ [factoryId]: departmentsData.data });
         }
       }
     } catch (error) {
@@ -127,9 +135,13 @@ export default function AuthDashboardClient({
   };
 
   useEffect(() => {
-    if (currentUser.isSystemAdmin) {
-      void refreshData(selectedFactoryId);
+    if (!currentUser.isSystemAdmin) return;
+    if (!hasSkippedInitialRefresh.current) {
+      hasSkippedInitialRefresh.current = true;
+      return;
     }
+
+    void refreshData(selectedFactoryId);
   }, [selectedFactoryId]);
 
   // Open User Modal

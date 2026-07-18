@@ -7,13 +7,12 @@ import { resolveFactoryId } from "@/lib/factory-scope";
 
 export async function GET(request: NextRequest) {
   try {
-    const hasAccess = await PermissionService.hasPermission("auth", "view");
-    if (!hasAccess) {
-      return ApiResponse.forbidden("Bạn không có quyền xem danh sách người dùng.");
-    }
-
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+
+    if (!currentUser.isAdmin && !currentUser.permissions.auth?.view) {
+      return ApiResponse.forbidden("Bạn không có quyền xem danh sách người dùng.");
+    }
 
     const { searchParams } = new URL(request.url);
     const factoryId = currentUser.isSystemAdmin ? searchParams.get("factoryId") || undefined : currentUser.factoryId;

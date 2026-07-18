@@ -38,6 +38,21 @@ export class DepartmentService {
   }
 
   /**
+   * Get departments for every active factory in one query.
+   * The caller must enforce system-admin access before using this method.
+   */
+  static async getAllDepartments() {
+    return await query(
+      `SELECT d.id, d.factory_id, f.name as factory_name, d.code, d.name, d.description,
+              d.is_admin, d.is_active, d.created_at, d.updated_at
+       FROM departments d
+       JOIN factories f ON f.id = d.factory_id AND f.deleted_at IS NULL
+       WHERE d.deleted_at IS NULL
+       ORDER BY d.factory_id ASC, d.is_admin DESC, d.name ASC`
+    );
+  }
+
+  /**
    * Get department details with permissions by ID
    */
   static async getDepartmentById(id: string, factoryId: string) {

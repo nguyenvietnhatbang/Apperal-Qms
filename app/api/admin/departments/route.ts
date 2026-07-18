@@ -7,15 +7,23 @@ import { resolveFactoryId } from "@/lib/factory-scope";
 
 export async function GET(request: NextRequest) {
   try {
-    const hasAccess = await PermissionService.hasPermission("auth", "view");
-    if (!hasAccess) {
-      return ApiResponse.forbidden("Bạn không có quyền xem thông tin phòng ban.");
-    }
-
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
 
+    if (!currentUser.isAdmin && !currentUser.permissions.auth?.view) {
+      return ApiResponse.forbidden("Bạn không có quyền xem thông tin phòng ban.");
+    }
+
     const { searchParams } = new URL(request.url);
+    if (searchParams.get("allFactories") === "true") {
+      if (!currentUser.isSystemAdmin) {
+        return ApiResponse.forbidden("Chỉ admin hệ thống được xem phòng ban của tất cả xưởng.");
+      }
+
+      const departments = await DepartmentService.getAllDepartments();
+      return ApiResponse.success(departments);
+    }
+
     const factoryId = resolveFactoryId(currentUser, searchParams.get("factoryId"));
     const depts = await DepartmentService.getDepartments(factoryId);
     return ApiResponse.success(depts);
