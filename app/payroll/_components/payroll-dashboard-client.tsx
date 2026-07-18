@@ -12,6 +12,7 @@ import {
   ChevronsRight, ChevronLeft, SlidersHorizontal, RefreshCw, Menu
 } from "lucide-react";
 import { formatVND, formatDate, formatDecimal } from "@/lib/format";
+import PayrollOverview from "./payroll-overview";
 
 interface PayrollDashboardClientProps {
   currentUser: any;
@@ -110,8 +111,8 @@ export default function PayrollDashboardClient({
     const separator = url.includes("?") ? "&" : "?";
     return `${url}${separator}factoryId=${encodeURIComponent(factoryId)}`;
   };
-  const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "adjustments" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
-    "employees"
+  const [activeTab, setActiveTab] = useState<"dashboard" | "employees" | "rules" | "cycles" | "attendance" | "adjustments" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
+    "dashboard"
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -1293,6 +1294,15 @@ export default function PayrollDashboardClient({
           {/* Nav Links */}
           <nav className="p-4 space-y-1">
             <button
+              onClick={() => { setActiveTab("dashboard"); setSearchTerm(""); setMobileNavOpen(false); }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
+                activeTab === "dashboard" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
+              }`}
+            >
+              <LayoutGrid className="w-5 h-5" />
+              <span>Tổng quan</span>
+            </button>
+            <button
               onClick={() => { setActiveTab("employees"); setSearchTerm(""); setMobileNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                 activeTab === "employees" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
@@ -1469,7 +1479,7 @@ export default function PayrollDashboardClient({
             </div>
           )}
 
-          {activeTab !== "auditConfig" && (
+          {activeTab !== "auditConfig" && activeTab !== "dashboard" && (
             <button
               type="button"
               className="mobile-filter-toggle btn-secondary md:hidden mb-2 shrink-0"
@@ -1483,6 +1493,18 @@ export default function PayrollDashboardClient({
 
           {/* Tab Views Card */}
           <div className="flex-1 flex flex-col min-h-0 bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+            {activeTab === "dashboard" && (
+              <PayrollOverview
+                isAuditOnlyUser={isAuditOnlyUser}
+                cycles={cycles}
+                employees={employees}
+                selectedCycle={selectedCycle}
+                attendanceRecords={attendanceRecords}
+                payrollItems={payrollSheetItems}
+                verificationAttendanceRecords={auditAttendanceRecords}
+                verificationPayrollItems={auditPayrollSheetItems}
+              />
+            )}
             {activeTab === "auditConfig" && (
               <form onSubmit={handleAuditConfigSubmit} className="flex-1 flex flex-col min-h-0">
                 <div className="px-6 py-4 border-b border-zinc-150 flex flex-wrap items-center justify-between gap-4 shrink-0 bg-white">
