@@ -93,26 +93,21 @@ export async function getCurrentUser(): Promise<UserSessionData | null> {
     
     const tokenHash = hashToken(sessionToken);
     
-    // Find active session
-    const session = await queryOne(
-      `SELECT user_id, expires_at 
-       FROM user_sessions 
-       WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > now()`,
-      [tokenHash]
-    );
-    
-    if (!session) return null;
-    
-    // Get user details
+    // Resolve the active session and user in one indexed database round trip.
     const user = await queryOne(
       `SELECT u.id, u.username, u.display_name, u.email, u.employee_id, u.is_admin as user_admin,
               f.id as factory_id, f.name as factory_name, f.code as factory_code,
               d.id as dept_id, d.name as dept_name, d.code as dept_code, d.is_admin as dept_admin
-       FROM app_users u
+       FROM user_sessions s
+       JOIN app_users u ON u.id = s.user_id
        JOIN factories f ON f.id = u.factory_id AND f.deleted_at IS NULL AND f.is_active = true
        LEFT JOIN departments d ON u.department_id = d.id AND d.factory_id = u.factory_id AND d.deleted_at IS NULL AND d.is_active = true
-       WHERE u.id = $1 AND u.status = 'active' AND u.deleted_at IS NULL`,
-      [session.user_id]
+       WHERE s.token_hash = $1
+         AND s.revoked_at IS NULL
+         AND s.expires_at > now()
+         AND u.status = 'active'
+         AND u.deleted_at IS NULL`,
+      [tokenHash]
     );
     
     if (!user) return null;

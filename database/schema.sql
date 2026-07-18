@@ -734,6 +734,10 @@ CREATE INDEX IF NOT EXISTS idx_payroll_adjustments_cycle_employee
 CREATE INDEX IF NOT EXISTS idx_payroll_items_cycle_employee
   ON payroll_items (payroll_cycle_id, employee_code);
 
+CREATE INDEX IF NOT EXISTS idx_payroll_items_employee_cycle
+  ON payroll_items (employee_id, payroll_cycle_id)
+  WHERE employee_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_audit_attendance_cycle_employee_date
   ON audit_attendance_records (payroll_cycle_id, employee_code, work_date);
 
