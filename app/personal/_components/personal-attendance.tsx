@@ -9,11 +9,12 @@ interface PersonalAttendanceProps {
   user: PersonalUser;
   initialMonth: string;
   initialRecords: AttendanceRecord[];
+  embedded?: boolean;
 }
 
 const weekDays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
-export default function PersonalAttendance({ user, initialMonth, initialRecords }: PersonalAttendanceProps) {
+export default function PersonalAttendance({ user, initialMonth, initialRecords, embedded = false }: PersonalAttendanceProps) {
   const attendanceCache = useRef(new Map<string, AttendanceRecord[]>([[initialMonth, initialRecords]]));
   const activeRequest = useRef(0);
   const [month, setMonth] = useState(initialMonth);
@@ -81,8 +82,8 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords 
     setMonth(nextMonth);
   };
 
-  return (
-    <PersonalShell user={user}>
+  const content = (
+    <>
       <section className="border-b border-stone-300 pb-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div><p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">Time & attendance</p><h1 className="mt-1 text-3xl font-black tracking-tight text-stone-950">Chấm công cá nhân</h1><p className="mt-1 text-sm text-stone-500">Rê vào một ngày để xem đầy đủ dữ liệu ngay bên cạnh lịch.</p></div>
@@ -117,14 +118,15 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords 
       </section>
 
       {mobileRecord && <MobileAttendanceDrawer record={mobileRecord} onClose={() => setMobileRecord(null)} />}
-    </PersonalShell>
+    </>
   );
+  return embedded ? content : <PersonalShell user={user}>{content}</PersonalShell>;
 }
 
-function CalendarDay({ dateKey, day, record, loading, active, onInspect, onOpenMobile }: { dateKey: string; day: number; record?: AttendanceRecord; loading: boolean; active: boolean; onInspect: (record: AttendanceRecord) => void; onOpenMobile: (record: AttendanceRecord) => void }) {
+function CalendarDay({ dateKey, day, record, loading, active, onInspect, onOpenMobile }: { dateKey: string; day: number; record?: AttendanceRecord; loading: boolean; active: boolean; onInspect: (record: AttendanceRecord | null) => void; onOpenMobile: (record: AttendanceRecord) => void }) {
   const state = getAttendanceState(record);
   const isToday = dateKey === getTodayKey();
-  return <button type="button" disabled={!record || loading} onMouseEnter={() => record && onInspect(record)} onFocus={() => record && onInspect(record)} onClick={() => { if (record) { onInspect(record); onOpenMobile(record); } }} className={`group relative aspect-square border p-2 text-left transition sm:aspect-[1.35/1] sm:p-3 ${state.cellClass} ${record ? "hover:-translate-y-0.5 hover:border-stone-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" : "cursor-default"} ${active ? "border-stone-950 shadow-md" : "border-transparent"} ${isToday ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}><span className="text-sm font-black sm:text-base">{day}</span>{record && <><span className={`absolute right-2 top-2 h-2 w-2 rounded-full sm:right-3 sm:top-3 ${state.dotClass}`} /><span className="absolute bottom-2 left-2 hidden text-[9px] font-black uppercase tracking-wide opacity-0 transition group-hover:opacity-100 sm:block">Xem chi tiết</span></>}</button>;
+  return <button type="button" disabled={!record || loading} onMouseEnter={() => record && onInspect(record)} onMouseLeave={() => onInspect(null)} onFocus={() => record && onInspect(record)} onBlur={() => onInspect(null)} onClick={() => { if (record) onOpenMobile(record); }} className={`group relative aspect-square border p-2 text-left transition sm:aspect-[1.35/1] sm:p-3 ${state.cellClass} ${record ? "hover:-translate-y-0.5 hover:border-stone-700 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500" : "cursor-default"} ${active ? "border-stone-950 shadow-md" : "border-transparent"} ${isToday ? "ring-2 ring-orange-500 ring-offset-1" : ""}`}><span className="text-sm font-black sm:text-base">{day}</span>{record && <><span className={`absolute right-2 top-2 h-2 w-2 rounded-full sm:right-3 sm:top-3 ${state.dotClass}`} /><span className="absolute bottom-2 left-2 hidden text-[9px] font-black uppercase tracking-wide opacity-0 transition group-hover:opacity-100 sm:block">Xem chi tiết</span></>}</button>;
 }
 
 function AttendanceInspector({ record }: { record: AttendanceRecord | null }) {

@@ -21,6 +21,7 @@ import { PayslipDialog, PendingPayrollDialog, SalaryConfigDialog } from "./perso
 interface PersonalDashboardProps {
   user: PersonalUser;
   initialOverview: PersonalOverview;
+  embedded?: boolean;
 }
 
 function getDefaultCycleKey(overview: PersonalOverview) {
@@ -29,7 +30,7 @@ function getDefaultCycleKey(overview: PersonalOverview) {
   return "";
 }
 
-export default function PersonalDashboard({ user, initialOverview }: PersonalDashboardProps) {
+export default function PersonalDashboard({ user, initialOverview, embedded = false }: PersonalDashboardProps) {
   const [selectedCycleKey, setSelectedCycleKey] = useState(() => getDefaultCycleKey(initialOverview));
   const [payslip, setPayslip] = useState<any>(null);
   const [isSalaryConfigOpen, setIsSalaryConfigOpen] = useState(false);
@@ -61,8 +62,8 @@ export default function PersonalDashboard({ user, initialOverview }: PersonalDas
     }
   };
 
-  return (
-    <PersonalShell user={user}>
+  const content = (
+    <>
       <ProfileHeader overview={initialOverview} />
 
       {error && (
@@ -94,12 +95,13 @@ export default function PersonalDashboard({ user, initialOverview }: PersonalDas
         <SalaryConfigDialog config={initialOverview.salaryConfig} onClose={() => setIsSalaryConfigOpen(false)} />
       )}
       {pendingPayroll && <PendingPayrollDialog item={pendingPayroll} onClose={() => setPendingPayroll(null)} />}
-    </PersonalShell>
+    </>
   );
+  return embedded ? content : <PersonalShell user={user}>{content}</PersonalShell>;
 }
 
 function ProfileHeader({ overview }: { overview: PersonalOverview }) {
-  const latestAttendance = overview.attendance[0];
+  const latestAttendance = overview.attendance.at(-1);
   return (
     <section className="border-b border-stone-300 pb-5">
       <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
