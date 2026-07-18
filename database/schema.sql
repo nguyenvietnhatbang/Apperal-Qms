@@ -724,6 +724,10 @@ CREATE INDEX IF NOT EXISTS idx_attendance_records_cycle_employee_date
 CREATE INDEX IF NOT EXISTS idx_attendance_records_work_date_employee
   ON attendance_records (work_date, employee_id, employee_code, updated_at DESC, created_at DESC);
 
+CREATE INDEX IF NOT EXISTS idx_attendance_records_employee_date
+  ON attendance_records (employee_id, work_date)
+  WHERE employee_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS idx_payroll_adjustments_cycle_employee
   ON payroll_adjustments (payroll_cycle_id, employee_id);
 

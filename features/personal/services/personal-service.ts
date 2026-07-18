@@ -1,6 +1,21 @@
 import { query, queryOne } from "@/lib/db";
 
 export class PersonalService {
+  static async getAttendance(employeeId: string, factoryId: string, month: string) {
+    return query(
+      `SELECT ar.work_date as "workDate", ar.workday_count as "workdayCount", ar.work_hours as "workHours",
+              ar.check_in_1 as "checkIn", ar.check_out_1 as "checkOut", ar.late_minutes as "lateMinutes",
+              ar.early_leave_minutes as "earlyLeaveMinutes", ar.overtime_normal_hours as "overtimeHours", ar.symbol
+       FROM attendance_records ar
+       WHERE ar.employee_id = $1
+         AND ar.work_date >= $2::date
+         AND ar.work_date < ($2::date + INTERVAL '1 month')
+         AND EXISTS (SELECT 1 FROM payroll_cycles pc WHERE pc.id = ar.payroll_cycle_id AND pc.factory_id = $3)
+       ORDER BY ar.work_date ASC`,
+      [employeeId, `${month}-01`, factoryId]
+    );
+  }
+
   static async getOverview(employeeId: string, factoryId: string, month?: string) {
     const attendanceParams: string[] = [employeeId, factoryId];
     const attendanceMonthCondition = month
@@ -15,18 +30,18 @@ export class PersonalService {
          WHERE id = $1 AND factory_id = $2 AND deleted_at IS NULL`,
         [employeeId, factoryId]
       ),
-      query(
-        `SELECT work_date as "workDate", workday_count as "workdayCount", work_hours as "workHours",
-                check_in_1 as "checkIn", check_out_1 as "checkOut", late_minutes as "lateMinutes",
-                early_leave_minutes as "earlyLeaveMinutes", overtime_normal_hours as "overtimeHours", symbol
-         FROM attendance_records ar
-         JOIN payroll_cycles pc ON pc.id = ar.payroll_cycle_id
-         WHERE ar.employee_id = $1 AND pc.factory_id = $2
-         ${attendanceMonthCondition}
-         ORDER BY ar.work_date DESC
-         ${month ? "" : "LIMIT 31"}`,
-        attendanceParams
-      ),
+      month
+        ? this.getAttendance(employeeId, factoryId, month)
+        : query(
+          `SELECT ar.work_date as "workDate", ar.workday_count as "workdayCount", ar.work_hours as "workHours",
+                  ar.check_in_1 as "checkIn", ar.check_out_1 as "checkOut", ar.late_minutes as "lateMinutes",
+                  ar.early_leave_minutes as "earlyLeaveMinutes", ar.overtime_normal_hours as "overtimeHours", ar.symbol
+           FROM attendance_records ar
+           WHERE ar.employee_id = $1
+             AND EXISTS (SELECT 1 FROM payroll_cycles pc WHERE pc.id = ar.payroll_cycle_id AND pc.factory_id = $2)
+           ORDER BY ar.work_date DESC LIMIT 31`,
+          attendanceParams
+        ),
       query(
         `SELECT pc.id as "cycleId", pc.name as "cycleName", pc.period_start as "periodStart", pc.period_end as "periodEnd",
                 pc.status, pi.net_salary as "netSalary", pi.gross_income as "grossIncome", pi.total_deduction as "totalDeduction",
