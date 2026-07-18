@@ -119,3 +119,195 @@ body {
     background: rgb(254 242 242);
   }
 }
+
+/* Shared mobile layout for the management dashboards. */
+@media (max-width: 767px) {
+  .dashboard-shell main {
+    min-width: 0;
+    padding: 0.75rem;
+  }
+
+  .dashboard-shell main > .flex-1.flex.flex-col.min-h-0 {
+    border-radius: 0.875rem;
+  }
+
+  .dashboard-shell header > div:first-of-type {
+    min-width: 0;
+    overflow: hidden;
+    margin-left: 0.5rem;
+  }
+
+  .dashboard-shell header > div:first-of-type > a,
+  .dashboard-shell header > div:first-of-type > svg {
+    display: none;
+  }
+
+  .dashboard-shell header > div:first-of-type > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-shell header > div:last-child {
+    gap: 0.5rem;
+  }
+
+  .dashboard-shell header > div:last-child > div:first-child,
+  .dashboard-shell header > div:last-child > div:nth-child(2) {
+    display: none;
+  }
+
+  .dashboard-shell header > div:last-child > div:last-child {
+    display: flex;
+  }
+
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between {
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between > *,
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between .relative,
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between input,
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between select,
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between button {
+    width: 100%;
+    max-width: none;
+  }
+
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between > div:last-child,
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between > button:last-child {
+    display: flex;
+    justify-content: stretch;
+  }
+
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between button {
+    min-height: 2.625rem;
+  }
+
+  .dashboard-shell table {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: separate;
+  }
+
+  .dashboard-shell table thead {
+    display: none;
+  }
+
+  .dashboard-shell table tbody {
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .dashboard-shell table tbody > tr:not(:has(td[colspan])) {
+    display: block;
+    overflow: hidden;
+    margin: 0;
+    border: 1px solid rgb(228 228 231);
+    border-radius: 0.875rem;
+    background: white;
+    box-shadow: 0 1px 2px rgb(24 24 27 / 0.04);
+  }
+
+  .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    width: 100%;
+    min-width: 0;
+    padding: 0.55rem 0.75rem !important;
+    border: 0 !important;
+    white-space: normal !important;
+    text-align: right;
+    position: static !important;
+    box-shadow: none !important;
+  }
+
+  .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td:first-child {
+    padding-top: 0.75rem !important;
+  }
+
+  .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td:last-child {
+    padding-bottom: 0.75rem !important;
+  }
+
+  .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td > * {
+    max-width: 70%;
+  }
+
+  .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td:has(button) {
+    justify-content: flex-end;
+    border-top: 1px solid rgb(244 244 245) !important;
+  }
+
+  .dashboard-shell table tbody > tr:has(td[colspan]) {
+    display: block;
+  }
+
+  .dashboard-shell table tbody > tr:has(td[colspan]) > td {
+    display: block;
+    width: 100%;
+  }
+
+  .dashboard-shell .px-6.py-3\.5.border-t,
+  .dashboard-shell .px-4.py-3\.5.border-t {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .dashboard-shell .px-6.py-3\.5.border-t > *:first-child,
+  .dashboard-shell .px-4.py-3\.5.border-t > *:first-child {
+    width: 100%;
+  }
+
+  .dashboard-shell .fixed > .bg-white {
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - 1.5rem);
+    border-radius: 1rem;
+    overflow-y: auto;
+  }
+
+  .dashboard-shell .fixed > .bg-white > .border-t {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .dashboard-shell .fixed > .bg-white > .border-t > button {
+    flex: 1 1 8rem;
+  }
+
+  .dashboard-shell .fixed > .bg-white > .border-b,
+  .dashboard-shell .fixed > .bg-white > .border-t {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .dashboard-shell .fixed > .bg-white form,
+  .dashboard-shell .fixed > .bg-white form > div {
+    min-width: 0;
+  }
+
+  .dashboard-shell .fixed > .bg-white .grid.grid-cols-2,
+  .dashboard-shell .fixed > .bg-white .grid.grid-cols-3,
+  .dashboard-shell .fixed > .bg-white .grid.grid-cols-\[1fr_180px_80px\] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .dashboard-shell .fixed > .bg-white .grid.grid-cols-2,
+  .dashboard-shell .fixed > .bg-white .grid.grid-cols-3 {
+    gap: 0.75rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-menu-button,
+  .mobile-nav-backdrop {
+    display: none;
+  }
+}

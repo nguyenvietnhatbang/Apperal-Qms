@@ -9,7 +9,7 @@ import {
   Home, Settings, HelpCircle, Loader2, Calendar, FileSpreadsheet,
   UploadCloud, FileText, CheckCircle2, Lock, Unlock, DollarSign,
   Info, Filter, Printer, Download, ArrowLeft, ChevronsLeft, 
-  ChevronsRight, ChevronLeft, SlidersHorizontal, RefreshCw
+  ChevronsRight, ChevronLeft, SlidersHorizontal, RefreshCw, Menu
 } from "lucide-react";
 import { formatVND, formatDate, formatDecimal } from "@/lib/format";
 
@@ -113,6 +113,7 @@ export default function PayrollDashboardClient({
   const [activeTab, setActiveTab] = useState<"employees" | "rules" | "cycles" | "attendance" | "adjustments" | "sheet" | "auditConfig" | "auditAttendance" | "auditSheet">(
     "employees"
   );
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [cycles, setCycles] = useState(initialCycles);
   const [employees, setEmployees] = useState(initialEmployees);
   const [rules, setRules] = useState(initialRules);
@@ -1236,9 +1237,9 @@ export default function PayrollDashboardClient({
   };
 
   return (
-    <div className="flex h-screen bg-zinc-50 text-zinc-900 font-sans antialiased overflow-hidden">
+    <div className="dashboard-shell flex h-screen bg-zinc-50 text-zinc-900 font-sans antialiased overflow-hidden">
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-r border-zinc-200 flex flex-col justify-between shrink-0 shadow-sm z-10">
+      <aside className={`app-sidebar fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-zinc-200 flex flex-col justify-between shrink-0 shadow-sm transition-transform duration-200 md:relative md:translate-x-0 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div>
           {/* Logo Brand */}
           <div className="px-6 py-5 border-b border-zinc-100 flex items-center gap-3">
@@ -1369,11 +1370,13 @@ export default function PayrollDashboardClient({
       </aside>
 
       {/* Main Panel */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      {mobileNavOpen && <button type="button" aria-label="Đóng menu" className="mobile-nav-backdrop fixed inset-0 z-30 bg-zinc-950/30 md:hidden" onClick={() => setMobileNavOpen(false)} />}
+      <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
         {/* Top Header Navbar */}
-        <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
+        <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-3 sm:px-6 shrink-0 shadow-sm z-10">
+          <button type="button" aria-label="Mở menu" className="mobile-menu-button icon-btn md:hidden shrink-0" onClick={() => setMobileNavOpen(true)}><Menu className="w-5 h-5" /></button>
           {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-sm text-zinc-500 font-medium">
+          <div className="flex items-center gap-2 text-sm text-zinc-500 font-medium min-w-0">
             <Link href="/modules" className="hover:text-zinc-800">Trang chủ</Link>
             <ChevronRight className="w-4 h-4 text-zinc-300" />
             <Link href="/payroll" className="hover:text-zinc-800">Quản lý nhân sự</Link>
@@ -1385,7 +1388,7 @@ export default function PayrollDashboardClient({
           </div>
 
           {/* User profile details */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 min-w-0">
             {/* Cycle Selector */}
             <div className="flex items-center gap-2">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Kỳ lương:</label>

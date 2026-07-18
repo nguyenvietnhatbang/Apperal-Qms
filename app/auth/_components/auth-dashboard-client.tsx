@@ -6,7 +6,7 @@ import {
   Users, Shield, LayoutGrid, LogOut, Plus, Search, 
   Edit2, Trash2, Key, Bell, User, Check, X, ShieldAlert,
   ChevronRight, Home, Settings, HelpCircle, Loader2, ArrowLeft, 
-  ChevronsLeft, ChevronsRight, ChevronLeft, SlidersHorizontal, Building2
+  ChevronsLeft, ChevronsRight, ChevronLeft, SlidersHorizontal, Building2, Menu
 } from "lucide-react";
 import Link from "next/link";
 
@@ -27,6 +27,7 @@ export default function AuthDashboardClient({
 }: AuthDashboardClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"users" | "departments" | "factories">("users");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [departments, setDepartments] = useState(initialDepartments);
   const [users, setUsers] = useState(initialUsers);
   const [factories, setFactories] = useState(initialFactories);
@@ -516,9 +517,9 @@ export default function AuthDashboardClient({
   );
 
   return (
-    <div className="flex h-screen bg-zinc-50 text-zinc-900 font-sans antialiased overflow-hidden">
+    <div className="dashboard-shell flex h-screen bg-zinc-50 text-zinc-900 font-sans antialiased overflow-hidden">
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-white border-r border-zinc-200 flex flex-col justify-between shrink-0 shadow-sm z-10">
+      <aside className={`app-sidebar fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-zinc-200 flex flex-col justify-between shrink-0 shadow-sm transition-transform duration-200 md:relative md:translate-x-0 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div>
           {/* Logo Brand */}
           <div className="px-6 py-5 border-b border-zinc-100 flex items-center gap-3">
@@ -586,9 +587,11 @@ export default function AuthDashboardClient({
       </aside>
 
       {/* Main Panel */}
-      <div className="flex-1 flex flex-col overflow-hidden relative">
+      {mobileNavOpen && <button type="button" aria-label="Đóng menu" className="mobile-nav-backdrop fixed inset-0 z-30 bg-zinc-950/30 md:hidden" onClick={() => setMobileNavOpen(false)} />}
+      <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
         {/* Top Header Navbar */}
-        <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-6 shrink-0 shadow-sm z-10">
+        <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-3 sm:px-6 shrink-0 shadow-sm z-10">
+          <button type="button" aria-label="Mở menu" className="mobile-menu-button icon-btn md:hidden shrink-0" onClick={() => setMobileNavOpen(true)}><Menu className="w-5 h-5" /></button>
           {/* Breadcrumbs */}
           <div className="flex items-center gap-2 text-sm text-zinc-500 font-medium">
             <Link href="/modules" className="hover:text-zinc-800">Trang chủ</Link>
@@ -599,7 +602,7 @@ export default function AuthDashboardClient({
           </div>
 
           {/* User profile dropdown info */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 min-w-0">
             {currentUser.isSystemAdmin && (
               <select
                 value={selectedFactoryId}
