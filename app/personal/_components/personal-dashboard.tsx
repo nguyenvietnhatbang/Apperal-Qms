@@ -103,25 +103,25 @@ export default function PersonalDashboard({ user, initialOverview, embedded = fa
 function ProfileHeader({ overview }: { overview: PersonalOverview }) {
   const latestAttendance = overview.attendance.at(-1);
   return (
-    <section className="border-b border-stone-300 pb-5">
+    <section className="border-b border-slate-300 pb-5">
       <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
         <div className="flex min-w-0 items-center gap-4">
-          <div className="grid h-14 w-14 shrink-0 place-items-center bg-orange-500 text-xl font-black text-stone-950">
+          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-xl font-black text-white shadow-sm">
             {overview.profile.fullName.slice(0, 1).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-orange-600">Personal finance workspace</p>
-            <h1 className="mt-1 truncate text-3xl font-black tracking-tight text-stone-950">{overview.profile.fullName}</h1>
-            <p className="mt-1 truncate text-sm text-stone-500">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Personal finance workspace</p>
+            <h1 className="mt-1 truncate text-3xl font-black tracking-tight text-slate-950">{overview.profile.fullName}</h1>
+            <p className="mt-1 truncate text-sm text-slate-500">
               {overview.profile.employeeCode} · {overview.profile.positionTitle || "Nhân viên"} · {overview.profile.departmentName || "Chưa phân bộ phận"}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3 border-l-2 border-orange-500 bg-[#fffdf8] px-4 py-3 shadow-sm">
-          <Clock3 className="h-5 w-5 text-orange-600" />
+        <div className="flex items-center gap-3 rounded-xl border-l-2 border-emerald-500 bg-white px-4 py-3 shadow-sm">
+          <Clock3 className="h-5 w-5 text-emerald-600" />
           <div>
-            <p className="text-[10px] font-black uppercase tracking-wide text-stone-400">Chấm công gần nhất</p>
-            <p className="mt-0.5 text-sm font-black text-stone-950">
+            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Chấm công gần nhất</p>
+            <p className="mt-0.5 text-sm font-black text-slate-950">
               {latestAttendance ? `${formatDate(latestAttendance.workDate)} · ${latestAttendance.checkIn?.slice(0, 5) || "--:--"}–${latestAttendance.checkOut?.slice(0, 5) || "--:--"}` : "Chưa có dữ liệu"}
             </p>
           </div>
@@ -170,18 +170,18 @@ function PayrollWorkspace({
   ] as const : [];
 
   return (
-    <section className="overflow-hidden border border-stone-300 bg-[#fffdf8] shadow-[0_8px_30px_rgba(41,37,36,0.05)]">
-      <header className="border-b border-stone-200 bg-[#ebe6dc] p-4 sm:p-5">
+    <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.06)]">
+      <header className="border-b border-slate-200 bg-[#f1f5f9] p-4 sm:p-5">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-orange-700">Income statement</p>
-            <h2 className="mt-1 text-xl font-black text-stone-950">Bảng lương theo kỳ</h2>
+            <p className="text-xs font-black uppercase tracking-[0.16em] text-emerald-700">Income statement</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950">Bảng lương theo kỳ</h2>
           </div>
           <select
             aria-label="Chọn kỳ lương"
             value={selectedCycleKey}
             onChange={(event) => onCycleChange(event.target.value)}
-            className="w-full border border-stone-400 bg-[#fffdf8] px-3 py-2.5 text-sm font-bold outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 sm:max-w-[320px]"
+            className="w-full rounded-xl border border-slate-400 bg-white px-3 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 sm:max-w-[320px]"
           >
             {overview.pendingPayrolls.length > 0 && (
               <optgroup label="Đang xử lý">
@@ -199,18 +199,18 @@ function PayrollWorkspace({
       </header>
 
       {!selectedPayroll ? (
-        <div className="p-10 text-center text-sm text-stone-500">Chưa có dữ liệu bảng lương.</div>
+        <div className="p-10 text-center text-sm text-slate-500">Chưa có dữ liệu bảng lương.</div>
       ) : (
         <div className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-lg font-black text-stone-950">{selectedPayroll.cycleName}</h3>
+                <h3 className="text-lg font-black text-slate-950">{selectedPayroll.cycleName}</h3>
                 <StatusBadge pending={isPending} />
               </div>
-              <p className="mt-1 text-sm text-stone-500">{formatDate(selectedPayroll.periodStart)} – {formatDate(selectedPayroll.periodEnd)}</p>
+              <p className="mt-1 text-sm text-slate-500">{formatDate(selectedPayroll.periodStart)} – {formatDate(selectedPayroll.periodEnd)}</p>
             </div>
-            <p className="text-xs font-semibold text-stone-500">{isPending ? "Số liệu có thể thay đổi trước khi chốt" : "Số liệu đã được chốt"}</p>
+            <p className="text-xs font-semibold text-slate-500">{isPending ? "Số liệu có thể thay đổi trước khi chốt" : "Số liệu đã được chốt"}</p>
           </div>
 
           <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -219,7 +219,7 @@ function PayrollWorkspace({
             <SalaryMetric label="Tổng khấu trừ" value={selectedPayroll.totalDeduction} tone="rose" />
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden border border-stone-200 bg-stone-200 sm:grid-cols-4">
+          <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-4">
             <WorkMetric label="Ngày công" value={`${number(selectedPayroll.actualWorkdays)} công`} />
             <WorkMetric label="Nghỉ hưởng lương" value={`${number(selectedPayroll.paidLeaveDays)} ngày`} />
             <WorkMetric label="Nghỉ không lương" value={`${number(selectedPayroll.unpaidLeaveDays)} ngày`} />
@@ -231,12 +231,12 @@ function PayrollWorkspace({
             <SalaryBreakdown title="Các khoản khấu trừ" icon={<ShieldCheck className="h-4 w-4 text-rose-600" />} rows={deductionRows} danger />
           </div>
 
-          {selectedPayroll.note && <p className="mt-4 bg-stone-100 px-4 py-3 text-sm text-stone-600">Ghi chú: {selectedPayroll.note}</p>}
+          {selectedPayroll.note && <p className="mt-4 bg-slate-100 px-4 py-3 text-sm text-slate-600">Ghi chú: {selectedPayroll.note}</p>}
 
           <button
             onClick={() => isPending ? onOpenPending(selectedPayroll) : void onOpenPayslip(selectedPayroll.cycleId)}
             disabled={loadingCycleId === selectedPayroll.cycleId}
-            className={`mt-4 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-black transition disabled:opacity-60 ${isPending ? "bg-amber-500 text-stone-950 hover:bg-amber-400" : "bg-stone-950 text-white hover:bg-orange-600"}`}
+            className={`mt-4 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-black transition disabled:opacity-60 ${isPending ? "bg-amber-500 text-slate-950 hover:bg-amber-400" : "bg-slate-950 text-white hover:bg-emerald-600"}`}
           >
             <FileText className="h-4 w-4" />
             {loadingCycleId === selectedPayroll.cycleId ? "Đang tải phiếu lương..." : isPending ? "Xem khoản bổ sung và tạm ứng" : "Mở phiếu lương đầy đủ"}
@@ -251,17 +251,17 @@ function PayrollWorkspace({
 function SalaryConfigurationCard({ overview, onOpen }: { overview: PersonalOverview; onOpen: () => void }) {
   const config = overview.salaryConfig;
   return (
-    <section className="border border-stone-300 bg-[#fffdf8] p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-stone-400">Salary setup</p><h2 className="mt-1 text-lg font-black">Mức lương áp dụng</h2></div><CircleDollarSign className="h-6 w-6 text-orange-600" /></div>
-      {config ? <><p className="mt-4 text-3xl font-black text-stone-950">{formatVND(config.totalSalary)} <span className="text-base">đ</span></p><p className="mt-1 text-xs text-stone-500">Hiệu lực từ {formatDate(config.effectiveFrom)}</p><div className="mt-4 space-y-2 border-t border-stone-200 pt-4"><CompactLine label="Lương cơ bản" value={config.baseSalary} /><CompactLine label="Lương đóng bảo hiểm" value={config.insuranceSalary} /><CompactLine label="Tổng phụ cấp" value={Number(config.totalSalary) - Number(config.baseSalary)} /></div><button onClick={onOpen} className="mt-4 w-full border border-stone-400 px-4 py-2.5 text-sm font-black hover:border-orange-500 hover:bg-orange-50 hover:text-orange-700">Xem toàn bộ cấu hình</button></> : <p className="mt-4 text-sm text-stone-500">Chưa có cấu hình lương đang hiệu lực.</p>}
+    <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-slate-400">Salary setup</p><h2 className="mt-1 text-lg font-black">Mức lương áp dụng</h2></div><CircleDollarSign className="h-6 w-6 text-emerald-600" /></div>
+      {config ? <><p className="mt-4 text-3xl font-black text-slate-950">{formatVND(config.totalSalary)} <span className="text-base">đ</span></p><p className="mt-1 text-xs text-slate-500">Hiệu lực từ {formatDate(config.effectiveFrom)}</p><div className="mt-4 space-y-2 border-t border-slate-200 pt-4"><CompactLine label="Lương cơ bản" value={config.baseSalary} /><CompactLine label="Lương đóng bảo hiểm" value={config.insuranceSalary} /><CompactLine label="Tổng phụ cấp" value={Number(config.totalSalary) - Number(config.baseSalary)} /></div><button onClick={onOpen} className="mt-4 w-full rounded-xl border border-slate-400 px-4 py-2.5 text-sm font-black hover:border-emerald-500 hover:bg-emerald-50 hover:text-emerald-700">Xem toàn bộ cấu hình</button></> : <p className="mt-4 text-sm text-slate-500">Chưa có cấu hình lương đang hiệu lực.</p>}
     </section>
   );
 }
 
 function EmployeeInformationCard({ overview }: { overview: PersonalOverview }) {
   return (
-    <section className="border border-stone-300 bg-[#fffdf8] p-5 shadow-sm">
-      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-stone-400">Employment profile</p><h2 className="mt-1 text-lg font-black">Hồ sơ nhân viên</h2></div><UserRound className="h-6 w-6 text-orange-600" /></div>
+    <section className="rounded-xl border border-slate-300 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-slate-400">Employment profile</p><h2 className="mt-1 text-lg font-black">Hồ sơ nhân viên</h2></div><UserRound className="h-6 w-6 text-emerald-600" /></div>
       <div className="mt-4 grid gap-3 text-sm">
         <InfoLine icon={<IdCard />} label="Mã nhân viên" value={overview.profile.employeeCode} />
         <InfoLine icon={<BriefcaseBusiness />} label="Vị trí" value={overview.profile.positionTitle || "Chưa cập nhật"} />
@@ -278,19 +278,19 @@ function SalaryMetric({ label, value, tone }: { label: string; value?: string | 
 }
 
 function WorkMetric({ label, value }: { label: string; value: string }) {
-  return <div className="bg-[#fffdf8] p-3"><p className="text-[10px] font-bold text-stone-500">{label}</p><p className="mt-1 text-sm font-black text-stone-950">{value}</p></div>;
+  return <div className="bg-white p-3"><p className="text-[10px] font-bold text-slate-500">{label}</p><p className="mt-1 text-sm font-black text-slate-950">{value}</p></div>;
 }
 
 function SalaryBreakdown({ title, icon, rows, danger = false }: { title: string; icon: React.ReactNode; rows: readonly (readonly [string, string | number | undefined])[]; danger?: boolean }) {
-  return <div className="border border-stone-200 p-4"><div className="flex items-center gap-2 text-sm font-black text-stone-950">{icon}{title}</div><div className="mt-3 space-y-2.5">{rows.map(([label, value]) => <div key={label} className="flex items-center justify-between gap-3 text-xs"><span className="text-stone-600">{label}</span><span className={danger && Number(value || 0) > 0 ? "font-black text-rose-600" : "font-black text-stone-950"}>{formatVND(value || 0)} đ</span></div>)}</div></div>;
+  return <div className="rounded-xl border border-slate-200 p-4"><div className="flex items-center gap-2 text-sm font-black text-slate-950">{icon}{title}</div><div className="mt-3 space-y-2.5">{rows.map(([label, value]) => <div key={label} className="flex items-center justify-between gap-3 text-xs"><span className="text-slate-600">{label}</span><span className={danger && Number(value || 0) > 0 ? "font-black text-rose-600" : "font-black text-slate-950"}>{formatVND(value || 0)} đ</span></div>)}</div></div>;
 }
 
 function CompactLine({ label, value }: { label: string; value: string | number }) {
-  return <div className="flex items-center justify-between gap-3 text-sm"><span className="text-stone-500">{label}</span><span className="font-black">{formatVND(value)} đ</span></div>;
+  return <div className="flex items-center justify-between gap-3 text-sm"><span className="text-slate-500">{label}</span><span className="font-black">{formatVND(value)} đ</span></div>;
 }
 
 function InfoLine({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return <div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center bg-stone-100 text-stone-500 [&>svg]:h-4 [&>svg]:w-4">{icon}</span><div className="min-w-0"><p className="text-xs text-stone-500">{label}</p><p className="truncate font-bold text-stone-950">{value}</p></div></div>;
+  return <div className="flex items-center gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center bg-slate-100 text-slate-500 [&>svg]:h-4 [&>svg]:w-4">{icon}</span><div className="min-w-0"><p className="text-xs text-slate-500">{label}</p><p className="truncate font-bold text-slate-950">{value}</p></div></div>;
 }
 
 function StatusBadge({ pending }: { pending: boolean }) {
