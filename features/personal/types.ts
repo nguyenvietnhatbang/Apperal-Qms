@@ -6,14 +6,29 @@ export interface PersonalUser {
 
 export interface AttendanceRecord {
   workDate: string;
+  weekdayName: string | null;
+  departmentName: string | null;
+  positionTitle: string | null;
+  shiftName: string | null;
   workdayCount: string | number;
   workHours: string | number;
   checkIn: string | null;
   checkOut: string | null;
+  checkIn2: string | null;
+  checkOut2: string | null;
+  checkIn3: string | null;
+  checkOut3: string | null;
+  extraWorkdayCount: string | number;
+  extraHours: string | number;
   lateMinutes: string | number;
   earlyLeaveMinutes: string | number;
   overtimeHours: string | number;
+  overtimeSundayHours: string | number;
+  overtimeHolidayHours: string | number;
   symbol: string | null;
+  extraSymbol: string | null;
+  totalHours: string | number;
+  note: string | null;
 }
 
 export interface PayrollSummary {

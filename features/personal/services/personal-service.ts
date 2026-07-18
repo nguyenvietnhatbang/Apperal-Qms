@@ -3,9 +3,17 @@ import { query, queryOne } from "@/lib/db";
 export class PersonalService {
   static async getAttendance(employeeId: string, factoryId: string, month: string) {
     return query(
-      `SELECT ar.work_date as "workDate", ar.workday_count as "workdayCount", ar.work_hours as "workHours",
-              ar.check_in_1 as "checkIn", ar.check_out_1 as "checkOut", ar.late_minutes as "lateMinutes",
-              ar.early_leave_minutes as "earlyLeaveMinutes", ar.overtime_normal_hours as "overtimeHours", ar.symbol
+      `SELECT ar.work_date as "workDate", ar.weekday_name as "weekdayName",
+              ar.department_name as "departmentName", ar.position_title as "positionTitle", ar.shift_name as "shiftName",
+              ar.workday_count as "workdayCount", ar.work_hours as "workHours",
+              ar.check_in_1 as "checkIn", ar.check_out_1 as "checkOut",
+              ar.check_in_2 as "checkIn2", ar.check_out_2 as "checkOut2",
+              ar.check_in_3 as "checkIn3", ar.check_out_3 as "checkOut3",
+              ar.extra_workday_count as "extraWorkdayCount", ar.extra_hours as "extraHours",
+              ar.late_minutes as "lateMinutes", ar.early_leave_minutes as "earlyLeaveMinutes",
+              ar.overtime_normal_hours as "overtimeHours", ar.overtime_sunday_hours as "overtimeSundayHours",
+              ar.overtime_holiday_hours as "overtimeHolidayHours", ar.symbol, ar.extra_symbol as "extraSymbol",
+              ar.total_hours as "totalHours", ar.note
        FROM attendance_records ar
        WHERE ar.employee_id = $1
          AND ar.work_date >= $2::date
