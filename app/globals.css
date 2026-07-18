@@ -135,34 +135,35 @@ body {
     border-radius: 0.875rem;
   }
 
-  .dashboard-shell header > div:first-of-type {
-    min-width: 0;
-    overflow: hidden;
-    margin-left: 0.5rem;
+  .dashboard-shell .dashboard-header {
+    gap: 0.75rem;
   }
 
-  .dashboard-shell header > div:first-of-type > a,
-  .dashboard-shell header > div:first-of-type > svg {
+  .dashboard-shell .dashboard-breadcrumb,
+  .dashboard-shell .dashboard-cycle-selector,
+  .dashboard-shell .dashboard-header-divider {
     display: none;
   }
 
-  .dashboard-shell header > div:first-of-type > span {
+  .dashboard-shell .dashboard-user-controls {
+    margin-left: auto;
+    min-width: 0;
+  }
+
+  .dashboard-shell .dashboard-profile {
+    min-width: 0;
+  }
+
+  .dashboard-shell .dashboard-profile-details {
+    display: block;
+    min-width: 0;
+    max-width: min(52vw, 13rem);
+  }
+
+  .dashboard-shell .dashboard-profile-details p {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .dashboard-shell header > div:last-child {
-    gap: 0.5rem;
-  }
-
-  .dashboard-shell header > div:last-child > div:first-child,
-  .dashboard-shell header > div:last-child > div:nth-child(2) {
-    display: none;
-  }
-
-  .dashboard-shell header > div:last-child > div:last-child {
-    display: flex;
   }
 
   .dashboard-shell .flex.flex-wrap.items-center.justify-between {
@@ -170,22 +171,22 @@ body {
     gap: 0.75rem;
   }
 
-  .dashboard-shell .flex.flex-wrap.items-center.justify-between > *,
-  .dashboard-shell .flex.flex-wrap.items-center.justify-between .relative,
-  .dashboard-shell .flex.flex-wrap.items-center.justify-between input,
-  .dashboard-shell .flex.flex-wrap.items-center.justify-between select,
-  .dashboard-shell .flex.flex-wrap.items-center.justify-between button {
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between > * {
     width: 100%;
     max-width: none;
   }
 
-  .dashboard-shell .flex.flex-wrap.items-center.justify-between > div:last-child,
-  .dashboard-shell .flex.flex-wrap.items-center.justify-between > button:last-child {
-    display: flex;
-    justify-content: stretch;
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between > .flex {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
   }
 
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between input,
+  .dashboard-shell .flex.flex-wrap.items-center.justify-between select,
   .dashboard-shell .flex.flex-wrap.items-center.justify-between button {
+    width: 100%;
+    min-width: 0;
     min-height: 2.625rem;
   }
 
@@ -207,7 +208,8 @@ body {
   }
 
   .dashboard-shell table tbody > tr:not(:has(td[colspan])) {
-    display: block;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     overflow: hidden;
     margin: 0;
     border: 1px solid rgb(228 228 231);
@@ -218,15 +220,16 @@ body {
 
   .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td {
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
+    justify-content: flex-start;
+    gap: 0.25rem;
     width: 100%;
     min-width: 0;
     padding: 0.55rem 0.75rem !important;
     border: 0 !important;
     white-space: normal !important;
-    text-align: right;
+    text-align: left;
     position: static !important;
     box-shadow: none !important;
   }
@@ -238,7 +241,6 @@ body {
     font-size: 0.6875rem;
     font-weight: 700;
     letter-spacing: 0.025em;
-    text-align: left;
     text-transform: uppercase;
   }
 
@@ -251,12 +253,19 @@ body {
   }
 
   .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td > * {
-    max-width: 70%;
+    max-width: 100%;
   }
 
   .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td:has(button) {
-    justify-content: flex-end;
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
     border-top: 1px solid rgb(244 244 245) !important;
+  }
+
+  .dashboard-shell table tbody > tr:not(:has(td[colspan])) > td:has(button) > * {
+    max-width: none;
   }
 
   .dashboard-shell table tbody > tr:has(td[colspan]) {

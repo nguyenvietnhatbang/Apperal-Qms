@@ -114,6 +114,7 @@ export default function PayrollDashboardClient({
     "employees"
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [cycles, setCycles] = useState(initialCycles);
   const [employees, setEmployees] = useState(initialEmployees);
   const [rules, setRules] = useState(initialRules);
@@ -166,7 +167,36 @@ export default function PayrollDashboardClient({
     setPageSheet(1);
     setPageAuditAttendance(1);
     setPageAuditSheet(1);
+    setMobileFiltersOpen(false);
   }, [activeTab]);
+
+  useEffect(() => {
+    const dashboard = document.querySelector(".dashboard-shell");
+    if (!dashboard) return;
+
+    const addMobileTableLabels = () => {
+      dashboard.querySelectorAll<HTMLTableElement>("table").forEach((table) => {
+        const headers = Array.from(table.querySelectorAll("thead th")).map((header) =>
+          header.textContent?.replace(/\s+/g, " ").trim() || ""
+        );
+
+        table.querySelectorAll<HTMLTableRowElement>("tbody tr").forEach((row) => {
+          Array.from(row.cells).forEach((cell, index) => {
+            if (cell.colSpan > 1 || cell.dataset.label) return;
+
+            const label = headers[index] || (cell.querySelector('input[type="checkbox"]') ? "Chọn" : "");
+            if (label) cell.dataset.label = label;
+          });
+        });
+      });
+    };
+
+    addMobileTableLabels();
+    const observer = new MutationObserver(addMobileTableLabels);
+    observer.observe(dashboard, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, []);
 
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1237,7 +1267,7 @@ export default function PayrollDashboardClient({
   };
 
   return (
-    <div className="dashboard-shell flex h-screen bg-zinc-50 text-zinc-900 font-sans antialiased overflow-hidden">
+    <div className={`dashboard-shell ${mobileFiltersOpen ? "mobile-filters-open" : "mobile-filters-closed"} flex h-screen bg-zinc-50 text-zinc-900 font-sans antialiased overflow-hidden`}>
       {/* Sidebar Navigation */}
       <aside className={`app-sidebar fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-zinc-200 flex flex-col justify-between shrink-0 shadow-sm transition-transform duration-200 md:relative md:translate-x-0 ${mobileNavOpen ? "translate-x-0" : "-translate-x-full"}`}>
         <div>
@@ -1373,10 +1403,10 @@ export default function PayrollDashboardClient({
       {mobileNavOpen && <button type="button" aria-label="Đóng menu" className="mobile-nav-backdrop fixed inset-0 z-30 bg-zinc-950/30 md:hidden" onClick={() => setMobileNavOpen(false)} />}
       <div className="flex-1 flex flex-col overflow-hidden relative min-w-0">
         {/* Top Header Navbar */}
-        <header className="h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-3 sm:px-6 shrink-0 shadow-sm z-10">
+        <header className="dashboard-header h-16 bg-white border-b border-zinc-200 flex items-center justify-between px-3 sm:px-6 shrink-0 shadow-sm z-10">
           <button type="button" aria-label="Mở menu" className="mobile-menu-button icon-btn md:hidden shrink-0" onClick={() => setMobileNavOpen(true)}><Menu className="w-5 h-5" /></button>
           {/* Breadcrumbs */}
-          <div className="flex items-center gap-2 text-sm text-zinc-500 font-medium min-w-0">
+          <div className="dashboard-breadcrumb flex items-center gap-2 text-sm text-zinc-500 font-medium min-w-0">
             <Link href="/modules" className="hover:text-zinc-800">Trang chủ</Link>
             <ChevronRight className="w-4 h-4 text-zinc-300" />
             <Link href="/payroll" className="hover:text-zinc-800">Quản lý nhân sự</Link>
@@ -1388,9 +1418,9 @@ export default function PayrollDashboardClient({
           </div>
 
           {/* User profile details */}
-          <div className="flex items-center gap-4 min-w-0">
+          <div className="dashboard-user-controls flex items-center gap-4 min-w-0">
             {/* Cycle Selector */}
-            <div className="flex items-center gap-2">
+            <div className="dashboard-cycle-selector flex items-center gap-2">
               <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Kỳ lương:</label>
               <select
                 value={selectedCycleId}
@@ -1403,10 +1433,10 @@ export default function PayrollDashboardClient({
               </select>
             </div>
 
-            <div className="h-8 w-px bg-zinc-200"></div>
+            <div className="dashboard-header-divider h-8 w-px bg-zinc-200"></div>
 
-            <div className="flex items-center gap-3">
-              <div className="text-right">
+            <div className="dashboard-profile flex items-center gap-3">
+              <div className="dashboard-profile-details text-right">
                 <p className="text-sm font-semibold text-zinc-800 leading-none">{currentUser.displayName}</p>
                 <p className="text-xs text-zinc-400 mt-1 uppercase font-bold tracking-wider">
                   {currentUser.isAdmin ? "Admin" : currentUser.departmentName || "Thành viên"}
@@ -1429,6 +1459,18 @@ export default function PayrollDashboardClient({
             <div className="absolute inset-0 bg-white/60 backdrop-blur-xs flex items-center justify-center z-50">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
             </div>
+          )}
+
+          {activeTab !== "auditConfig" && (
+            <button
+              type="button"
+              className="mobile-filter-toggle btn-secondary md:hidden mb-2 shrink-0"
+              onClick={() => setMobileFiltersOpen((isOpen) => !isOpen)}
+              aria-expanded={mobileFiltersOpen}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span>{mobileFiltersOpen ? "Thu gọn bộ lọc" : "Bộ lọc & tìm kiếm"}</span>
+            </button>
           )}
 
           {/* Tab Views Card */}
