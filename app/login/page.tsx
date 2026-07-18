@@ -53,7 +53,7 @@ export default function LoginPage() {
         className="relative hidden min-h-screen overflow-hidden bg-slate-950 px-16 py-16 text-white lg:flex lg:flex-col lg:justify-between"
         style={{
           backgroundImage:
-            "linear-gradient(90deg, rgba(15,23,42,0.96), rgba(15,23,42,0.88) 46%, rgba(15,23,42,0.56)), url('https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?auto=format&fit=crop&w=1600&q=80')",
+            "linear-gradient(90deg, rgba(2,6,23,0.9), rgba(2,6,23,0.78) 46%, rgba(2,6,23,0.34)), url('/software-operations-login-bg.png')",
           backgroundPosition: "center",
           backgroundSize: "cover",
         }}
@@ -72,10 +72,10 @@ export default function LoginPage() {
           <div className="mt-16 max-w-2xl">
             <h1 className="text-5xl font-black leading-tight tracking-tight">
               Phần mềm quản lý công việc
-              <span className="mt-1 block text-blue-500">All - In - One</span>
+              <span className="mt-2 block text-center text-blue-500">All - In - One</span>
             </h1>
-            <p className="mt-7 max-w-xl text-xl leading-8 text-slate-300">
-              Một cổng vận hành thống nhất cho công việc, nhân sự, dữ liệu và báo cáo nội bộ.
+            <p className="mt-5 text-center text-xl font-medium leading-8 text-slate-200">
+              Accomplish Instantly Onywhere
             </p>
           </div>
         </div>
