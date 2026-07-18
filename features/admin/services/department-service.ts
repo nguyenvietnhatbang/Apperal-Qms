@@ -127,6 +127,16 @@ export class DepartmentService {
         }
       }
 
+      await client.query(
+        `INSERT INTO department_module_permissions (
+           department_id, module_id, can_view, can_create, can_update, can_delete, can_approve
+         )
+         SELECT $1, id, true, false, false, false, false
+         FROM modules WHERE code = 'personal' AND is_active = true
+         ON CONFLICT (department_id, module_id) DO UPDATE SET can_view = true, updated_at = now()`,
+        [newDept.id]
+      );
+
       return newDept;
     });
   }
@@ -183,6 +193,16 @@ export class DepartmentService {
           );
         }
       }
+
+      await client.query(
+        `INSERT INTO department_module_permissions (
+           department_id, module_id, can_view, can_create, can_update, can_delete, can_approve
+         )
+         SELECT $1, id, true, false, false, false, false
+         FROM modules WHERE code = 'personal' AND is_active = true
+         ON CONFLICT (department_id, module_id) DO UPDATE SET can_view = true, updated_at = now()`,
+        [id]
+      );
 
       return updatedDept;
     });

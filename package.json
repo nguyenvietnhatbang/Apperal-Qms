@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "init:admin": "node scripts/init-admin.mjs",
+    "backfill:employee-accounts": "node --env-file=.env.local scripts/backfill-employee-accounts.mjs",
     "import:bangluong": "node scripts/import-bangluong-csv.mjs",
     "import:chamcong": "node scripts/import-chamcong-csv.mjs",
     "import:bangluong-cycle": "node scripts/import-bangluong-cycle-adjustments.mjs",

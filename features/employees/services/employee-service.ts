@@ -1,4 +1,5 @@
-import { query, queryOne } from "@/lib/db";
+import { query, queryOne, transaction } from "@/lib/db";
+import { EmployeeAccountService } from "@/features/personal/services/employee-account-service";
 
 export interface EmployeeData {
   id?: string;
@@ -71,7 +72,8 @@ export class EmployeeService {
    * Create employee
    */
   static async createEmployee(data: EmployeeData) {
-    return await queryOne(
+    return await transaction(async (client) => {
+      const employeeResult = await client.query(
       `INSERT INTO employees (factory_id, employee_code, full_name, gender, department_name, position_title,
                               joined_date, status, dependent_count, has_child_under_6)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -79,7 +81,7 @@ export class EmployeeService {
                  department_name as "departmentName", position_title as "positionTitle", 
                  joined_date as "joinedDate", status, dependent_count as "dependentCount", 
                  has_child_under_6 as "hasChildUnder6"`,
-      [
+        [
         data.factoryId,
         data.employeeCode,
         data.fullName,
@@ -90,8 +92,17 @@ export class EmployeeService {
         data.status || "active",
         data.dependentCount !== undefined ? data.dependentCount : 0,
         data.hasChildUnder6 !== undefined ? data.hasChildUnder6 : false,
-      ]
-    );
+        ]
+      );
+      const employee = employeeResult.rows[0];
+      await EmployeeAccountService.createForEmployee(client, {
+        id: employee.id,
+        factoryId: data.factoryId,
+        employeeCode: employee.employeeCode,
+        fullName: employee.fullName,
+      });
+      return employee;
+    });
   }
 
   /**

@@ -40,6 +40,7 @@ export default async function ModulesPage() {
       });
   const authModule = allowedModules.find((mod) => mod.code === "auth");
   const payrollModule = allowedModules.find((mod) => mod.code === "payroll");
+  const personalModule = user.employeeId ? allowedModules.find((mod) => mod.code === "personal") : undefined;
   const payrollFactories = payrollModule ? await getAccessibleFactories(user) : [];
 
   const getModuleIcon = (code: string) => {
@@ -154,7 +155,7 @@ export default async function ModulesPage() {
           </button>
         </div>
 
-        {!authModule && payrollFactories.length === 0 ? (
+        {!authModule && !personalModule && payrollFactories.length === 0 ? (
           <div className="mt-12 max-w-md rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm">
             <ShieldCheck className="mx-auto mb-3 h-12 w-12 text-slate-300" />
             <h3 className="text-lg font-black text-slate-900">Không có quyền truy cập</h3>
@@ -166,6 +167,7 @@ export default async function ModulesPage() {
           <div className="mt-14 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
             {[
               ...(user.isSystemAdmin && authModule ? [authModule] : []),
+              ...(personalModule ? [personalModule] : []),
               ...payrollFactories.map((factory: any) => ({
                 ...payrollModule,
                 id: `${payrollModule.id}-${factory.id}`,

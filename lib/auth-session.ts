@@ -12,6 +12,7 @@ export interface UserSessionData {
   factoryId: string;
   factoryName: string;
   factoryCode: string;
+  employeeId: string | null;
   departmentId: string | null;
   departmentName: string | null;
   departmentCode: string | null;
@@ -104,7 +105,7 @@ export async function getCurrentUser(): Promise<UserSessionData | null> {
     
     // Get user details
     const user = await queryOne(
-      `SELECT u.id, u.username, u.display_name, u.email, u.is_admin as user_admin,
+      `SELECT u.id, u.username, u.display_name, u.email, u.employee_id, u.is_admin as user_admin,
               f.id as factory_id, f.name as factory_name, f.code as factory_code,
               d.id as dept_id, d.name as dept_name, d.code as dept_code, d.is_admin as dept_admin
        FROM app_users u
@@ -169,6 +170,7 @@ export async function getCurrentUser(): Promise<UserSessionData | null> {
       factoryId: user.factory_id,
       factoryName: user.factory_name,
       factoryCode: user.factory_code,
+      employeeId: user.employee_id,
       departmentId: user.dept_id,
       departmentName: user.dept_name,
       departmentCode: user.dept_code,

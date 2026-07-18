@@ -515,6 +515,7 @@ ON CONFLICT (code) DO NOTHING;
 
 ALTER TABLE departments ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE app_users ADD COLUMN IF NOT EXISTS factory_id uuid;
+ALTER TABLE app_users ADD COLUMN IF NOT EXISTS employee_id uuid;
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE payroll_cycles ADD COLUMN IF NOT EXISTS factory_id uuid;
 ALTER TABLE payroll_rules ADD COLUMN IF NOT EXISTS factory_id uuid;
@@ -651,6 +652,14 @@ BEGIN
   END IF;
 END $$;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'app_users_employee_fk') THEN
+    ALTER TABLE app_users
+      ADD CONSTRAINT app_users_employee_fk FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
 INSERT INTO user_factory_memberships (user_id, factory_id, department_id, is_default, is_active)
 SELECT id, factory_id, department_id, true, true
 FROM app_users
@@ -670,6 +679,10 @@ CREATE INDEX IF NOT EXISTS idx_app_users_department_status
 CREATE INDEX IF NOT EXISTS idx_app_users_factory_status
   ON app_users (factory_id, status)
   WHERE deleted_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_app_users_employee_unique
+  ON app_users (employee_id)
+  WHERE employee_id IS NOT NULL AND deleted_at IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_factory_memberships_unique_active
   ON user_factory_memberships (user_id, factory_id)
@@ -726,7 +739,8 @@ CREATE INDEX IF NOT EXISTS idx_audit_payroll_items_cycle_employee
 INSERT INTO modules (code, name, description, route_path, sort_order)
 VALUES
   ('auth', 'Auth', 'Quản lý người dùng, phòng ban và phân quyền module.', '/auth', 10),
-  ('payroll', 'Chấm công / Tính lương', 'Quản lý nhân viên, chấm công, chu kỳ lương và phiếu lương.', '/payroll', 20)
+  ('payroll', 'Chấm công / Tính lương', 'Quản lý nhân viên, chấm công, chu kỳ lương và phiếu lương.', '/payroll', 20),
+  ('personal', 'Cá nhân', 'Hồ sơ, chấm công và phiếu lương của nhân viên.', '/personal', 30)
 ON CONFLICT (code) DO UPDATE
 SET
   name = EXCLUDED.name,
@@ -734,6 +748,23 @@ SET
   route_path = EXCLUDED.route_path,
   sort_order = EXCLUDED.sort_order,
   updated_at = now();
+
+INSERT INTO departments (factory_id, code, name, description, is_admin, is_active)
+SELECT id, 'personal', 'Nhân viên', 'Quyền self-service cho nhân viên.', false, true
+FROM factories
+WHERE deleted_at IS NULL
+ON CONFLICT (factory_id, code) DO UPDATE
+SET name = EXCLUDED.name, description = EXCLUDED.description, is_active = true, updated_at = now();
+
+INSERT INTO department_module_permissions (
+  department_id, module_id, can_view, can_create, can_update, can_delete, can_approve
+)
+SELECT d.id, m.id, true, false, false, false, false
+FROM departments d
+JOIN modules m ON m.code = 'personal' AND m.is_active = true
+WHERE d.deleted_at IS NULL
+ON CONFLICT (department_id, module_id) DO UPDATE
+SET can_view = true, updated_at = now();
 
 INSERT INTO departments (factory_id, code, name, description, is_admin)
 SELECT id, 'admin', 'Admin', 'Phòng ban/quyền quản trị toàn hệ thống.', true
