@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth-session";
-import { PermissionService } from "@/features/auth/services/permission-service";
 import { PayrollCycleService } from "@/features/payroll/services/payroll-cycle-service";
 import { PayrollRuleService } from "@/features/payroll/services/payroll-rule-service";
 import { EmployeeService } from "@/features/employees/services/employee-service";
-import { getAccessibleFactories, resolveAccessibleFactoryId } from "@/lib/factory-scope";
+import { getAccessibleFactories } from "@/lib/factory-scope";
 import PayrollDashboardClient from "./_components/payroll-dashboard-client";
 
 interface PayrollPageProps {
@@ -18,25 +17,32 @@ export default async function PayrollPage({ searchParams }: PayrollPageProps) {
     redirect("/login");
   }
 
-  const hasAccess = await PermissionService.hasModuleAccess("payroll");
+  const hasAccess = user.isAdmin || Boolean(user.permissions.payroll?.view);
   if (!hasAccess) {
     redirect("/modules");
   }
 
-  const params = await searchParams;
-  const accessibleFactories = await getAccessibleFactories(user);
-  const factoryId = await resolveAccessibleFactoryId(user, params.factoryId);
+  const [params, accessibleFactories] = await Promise.all([
+    searchParams,
+    getAccessibleFactories(user),
+  ]);
+  const activeFactory = params.factoryId
+    ? accessibleFactories.find((factory: any) => factory.id === params.factoryId)
+    : accessibleFactories.find((factory: any) => factory.isDefault) || accessibleFactories[0];
 
-  if (!params.factoryId) {
-    redirect(`/payroll?factoryId=${factoryId}`);
+  if (!activeFactory) {
+    redirect("/modules");
   }
 
-  const activeFactory = accessibleFactories.find((factory: any) => factory.id === factoryId);
+  if (!params.factoryId) {
+    redirect(`/payroll?factoryId=${activeFactory.id}`);
+  }
 
-  // Preload data on server side
-  const cycles = await PayrollCycleService.getCycles(factoryId);
-  const employees = await EmployeeService.getEmployees(factoryId);
-  const rules = await PayrollRuleService.getRules(factoryId);
+  const [cycles, employees, rules] = await Promise.all([
+    PayrollCycleService.getCycles(activeFactory.id),
+    EmployeeService.getEmployees(activeFactory.id),
+    PayrollRuleService.getRules(activeFactory.id),
+  ]);
 
   return (
     <PayrollDashboardClient
@@ -44,7 +50,7 @@ export default async function PayrollPage({ searchParams }: PayrollPageProps) {
       initialCycles={cycles}
       initialEmployees={employees}
       initialRules={rules}
-      factoryId={factoryId}
+      factoryId={activeFactory.id}
       activeFactory={activeFactory}
       accessibleFactories={accessibleFactories}
     />

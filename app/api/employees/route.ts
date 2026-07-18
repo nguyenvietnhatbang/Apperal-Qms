@@ -7,15 +7,13 @@ import { resolveAccessibleFactoryId } from "@/lib/factory-scope";
 
 export async function GET(request: NextRequest) {
   try {
-    const hasAccess = await PermissionService.hasPermission("payroll", "view");
-    if (!hasAccess) {
-      return ApiResponse.forbidden("Bạn không có quyền xem danh sách nhân viên.");
-    }
-
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || undefined;
     const currentUser = await getCurrentUser();
     if (!currentUser) return ApiResponse.unauthorized("Chưa đăng nhập.");
+    if (!currentUser.isAdmin && !currentUser.permissions.payroll?.view) {
+      return ApiResponse.forbidden("Bạn không có quyền xem danh sách nhân viên.");
+    }
     const factoryId = await resolveAccessibleFactoryId(currentUser, searchParams.get("factoryId"));
 
     const employees = await EmployeeService.getEmployees(factoryId, search);

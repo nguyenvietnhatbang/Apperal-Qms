@@ -386,25 +386,33 @@ export default function PayrollDashboardClient({
   const refreshAllData = async () => {
     setIsLoading(true);
     try {
-      const cyRes = await fetch(withFactory("/api/payroll/cycles"));
-      const cyData = await cyRes.json();
-      if (cyData.success) setCycles(cyData.data);
+      const [cyclesResponse, employeesResponse, rulesResponse] = await Promise.all([
+        fetch(withFactory("/api/payroll/cycles")),
+        fetch(withFactory("/api/employees")),
+        fetch(withFactory("/api/payroll/rules")),
+      ]);
+      const [cyclesData, employeesData, rulesData] = await Promise.all([
+        cyclesResponse.json(),
+        employeesResponse.json(),
+        rulesResponse.json(),
+      ]);
 
-      const emRes = await fetch(withFactory("/api/employees"));
-      const emData = await emRes.json();
-      if (emData.success) setEmployees(emData.data);
+      if (cyclesData.success) setCycles(cyclesData.data);
+      if (employeesData.success) setEmployees(employeesData.data);
+      if (rulesData.success) setRules(rulesData.data);
 
-      const ruRes = await fetch(withFactory("/api/payroll/rules"));
-      const ruData = await ruRes.json();
-      if (ruData.success) setRules(ruData.data);
-
-      await loadAuditConfig();
-
-      if (selectedCycleId) {
-        await loadAttendanceRecords();
-        await loadPayrollAdjustments();
-        await loadPayrollSheet();
-      }
+      await Promise.all([
+        loadAuditConfig(),
+        ...(selectedCycleId
+          ? [
+              loadAttendanceRecords(),
+              loadPayrollAdjustments(),
+              loadPayrollSheet(),
+              loadAuditAttendanceRecords(),
+              loadAuditPayrollSheet(),
+            ]
+          : []),
+      ]);
     } catch (error) {
       console.error(error);
     } finally {
