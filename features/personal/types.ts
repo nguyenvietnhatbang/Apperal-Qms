@@ -81,6 +81,7 @@ export interface SalaryConfig {
   otherBonus: string | number;
   mealAllowance: string | number;
   note: string | null;
+  isCurrent?: boolean;
 }
 
 export interface PersonalOverview {
@@ -96,4 +97,5 @@ export interface PersonalOverview {
   payrollHistory: PayrollSummary[];
   pendingPayrolls: PayrollSummary[];
   salaryConfig: SalaryConfig | null;
+  salaryConfigHistory: SalaryConfig[];
 }
