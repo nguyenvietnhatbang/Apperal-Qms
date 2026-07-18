@@ -535,7 +535,7 @@ export default function AuthDashboardClient({
           {/* Nav Links */}
           <nav className="p-4 space-y-1">
             <button
-              onClick={() => { setActiveTab("users"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("users"); setSearchTerm(""); setMobileNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                 activeTab === "users" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
@@ -544,7 +544,7 @@ export default function AuthDashboardClient({
               <span>Tài khoản Web</span>
             </button>
             <button
-              onClick={() => { setActiveTab("departments"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("departments"); setSearchTerm(""); setMobileNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                 activeTab === "departments" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
@@ -554,7 +554,7 @@ export default function AuthDashboardClient({
             </button>
             {currentUser.isSystemAdmin && (
               <button
-                onClick={() => { setActiveTab("factories"); setSearchTerm(""); }}
+                onClick={() => { setActiveTab("factories"); setSearchTerm(""); setMobileNavOpen(false); }}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                   activeTab === "factories" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                 }`}
@@ -715,10 +715,10 @@ export default function AuthDashboardClient({
                         ) : (
                           paginatedUsers.map((u) => (
                             <tr key={u.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
-                              <td className="px-6 py-2.5 text-center">
+                              <td data-label="Chọn" className="px-6 py-2.5 text-center">
                                 <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" />
                               </td>
-                              <td className="px-6 py-2.5">
+                              <td data-label="Họ và tên" className="px-6 py-2.5">
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold text-xs">
                                     {u.display_name.charAt(0).toUpperCase()}
@@ -726,12 +726,12 @@ export default function AuthDashboardClient({
                                   <span className="font-semibold text-zinc-800">{u.display_name}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-2.5 font-mono text-zinc-650 font-bold">{u.username}</td>
-                              <td className="px-6 py-2.5 text-zinc-500">{u.email || "-"}</td>
-                              <td className="px-6 py-2.5">
+                              <td data-label="Tên đăng nhập" className="px-6 py-2.5 font-mono text-zinc-650 font-bold">{u.username}</td>
+                              <td data-label="Email" className="px-6 py-2.5 text-zinc-500">{u.email || "-"}</td>
+                              <td data-label="Phòng ban" className="px-6 py-2.5">
                                 <span className="font-medium text-zinc-700">{u.department_name || "Chưa phân"}</span>
                               </td>
-                              <td className="px-6 py-2.5">
+                              <td data-label="Vai trò" className="px-6 py-2.5">
                                 {u.is_admin ? (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-55/60 text-red-650 border border-red-200/50 text-xs font-bold rounded-lg uppercase">
                                     <Shield className="w-3.5 h-3.5" /> Admin
@@ -742,7 +742,7 @@ export default function AuthDashboardClient({
                                   </span>
                                 )}
                               </td>
-                              <td className="px-6 py-2.5">
+                              <td data-label="Trạng thái" className="px-6 py-2.5">
                                 {u.status === "active" ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Đang hoạt động</span>
                                 ) : u.status === "locked" ? (
@@ -751,7 +751,7 @@ export default function AuthDashboardClient({
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-zinc-100 text-zinc-550 border border-zinc-200">Ngừng hoạt động</span>
                                 )}
                               </td>
-                              <td className="px-6 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
+                              <td data-label="Thao tác" className="px-6 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
                                 <div className="flex justify-end gap-2">
                                   <button onClick={() => openUserModal(u)} className="icon-btn hover:text-blue-600 rounded-lg p-1.5 cursor-pointer" title="Sửa"><Edit2 className="w-4 h-4" /></button>
                                   <button onClick={() => handleUserDelete(u.id)} disabled={u.username === "admin"} className="icon-btn-danger hover:bg-red-50 hover:text-red-700 rounded-lg p-1.5 disabled:opacity-30 cursor-pointer" title="Xóa"><Trash2 className="w-4 h-4" /></button>
@@ -852,13 +852,13 @@ export default function AuthDashboardClient({
                         ) : (
                           paginatedDepts.map((d) => (
                             <tr key={d.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
-                              <td className="px-6 py-2.5 text-center">
+                              <td data-label="Chọn" className="px-6 py-2.5 text-center">
                                 <input type="checkbox" className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer" />
                               </td>
-                              <td className="px-6 py-2.5 font-mono font-bold text-zinc-700">{d.code}</td>
-                              <td className="px-6 py-2.5 font-semibold text-zinc-800">{d.name}</td>
-                              <td className="px-6 py-2.5 text-zinc-500">{d.description || "-"}</td>
-                              <td className="px-6 py-2.5">
+                              <td data-label="Mã phòng ban" className="px-6 py-2.5 font-mono font-bold text-zinc-700">{d.code}</td>
+                              <td data-label="Tên phòng ban" className="px-6 py-2.5 font-semibold text-zinc-800">{d.name}</td>
+                              <td data-label="Mô tả" className="px-6 py-2.5 text-zinc-500">{d.description || "-"}</td>
+                              <td data-label="Quyền Admin" className="px-6 py-2.5">
                                 {d.is_admin ? (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-55/60 text-red-650 border border-red-200/50 text-xs font-bold rounded-lg uppercase">
                                     <ShieldAlert className="w-3.5 h-3.5" /> Quyền quản trị
@@ -867,14 +867,14 @@ export default function AuthDashboardClient({
                                   <span className="text-zinc-400">Nhân viên thường</span>
                                 )}
                               </td>
-                              <td className="px-6 py-2.5">
+                              <td data-label="Trạng thái" className="px-6 py-2.5">
                                 {d.is_active ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">Kích hoạt</span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-zinc-100 text-zinc-600 border border-zinc-200">Tắt</span>
                                 )}
                               </td>
-                              <td className="px-6 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
+                              <td data-label="Thao tác" className="px-6 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
                                 <div className="flex justify-end gap-2">
                                   <button onClick={() => openDeptModal(d)} className="icon-btn hover:text-blue-600 rounded-lg p-1.5 cursor-pointer" title="Sửa & Phân quyền"><Edit2 className="w-4 h-4" /></button>
                                   <button onClick={() => handleDeptDelete(d.id)} disabled={d.code === "admin"} className="icon-btn-danger hover:bg-red-50 hover:text-red-700 rounded-lg p-1.5 disabled:opacity-30 cursor-pointer" title="Xóa"><Trash2 className="w-4 h-4" /></button>

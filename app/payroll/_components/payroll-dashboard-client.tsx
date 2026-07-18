@@ -1255,7 +1255,7 @@ export default function PayrollDashboardClient({
           {/* Nav Links */}
           <nav className="p-4 space-y-1">
             <button
-              onClick={() => { setActiveTab("employees"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("employees"); setSearchTerm(""); setMobileNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                 activeTab === "employees" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
@@ -1264,7 +1264,7 @@ export default function PayrollDashboardClient({
               <span>Nhân sự & Lương riêng</span>
             </button>
             <button
-              onClick={() => { setActiveTab("rules"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("rules"); setSearchTerm(""); setMobileNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                 activeTab === "rules" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
               }`}
@@ -1275,7 +1275,7 @@ export default function PayrollDashboardClient({
             {!isAuditOnlyUser && (
               <>
                 <button
-                  onClick={() => { setActiveTab("cycles"); setSearchTerm(""); }}
+                  onClick={() => { setActiveTab("cycles"); setSearchTerm(""); setMobileNavOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                     activeTab === "cycles" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                   }`}
@@ -1284,7 +1284,7 @@ export default function PayrollDashboardClient({
                   <span>Chu kỳ lương</span>
                 </button>
                 <button
-                  onClick={() => { setActiveTab("attendance"); setSearchTerm(""); }}
+                  onClick={() => { setActiveTab("attendance"); setSearchTerm(""); setMobileNavOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                     activeTab === "attendance" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                   }`}
@@ -1293,7 +1293,7 @@ export default function PayrollDashboardClient({
                   <span>Chấm công gốc</span>
                 </button>
                 <button
-                  onClick={() => { setActiveTab("adjustments"); setSearchTerm(""); }}
+                  onClick={() => { setActiveTab("adjustments"); setSearchTerm(""); setMobileNavOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                     activeTab === "adjustments" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                   }`}
@@ -1302,7 +1302,7 @@ export default function PayrollDashboardClient({
                   <span>Bổ sung bảng lương</span>
                 </button>
                 <button
-                  onClick={() => { setActiveTab("sheet"); setSearchTerm(""); }}
+                  onClick={() => { setActiveTab("sheet"); setSearchTerm(""); setMobileNavOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                     activeTab === "sheet" ? "bg-blue-50 text-blue-600 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                   }`}
@@ -1314,7 +1314,7 @@ export default function PayrollDashboardClient({
                   Audit
                 </div>
                 <button
-                  onClick={() => { setActiveTab("auditConfig"); setSearchTerm(""); }}
+                  onClick={() => { setActiveTab("auditConfig"); setSearchTerm(""); setMobileNavOpen(false); }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                     activeTab === "auditConfig" ? "bg-emerald-50 text-emerald-700 shadow-sm" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800"
                   }`}
@@ -1325,7 +1325,7 @@ export default function PayrollDashboardClient({
               </>
             )}
             <button
-              onClick={() => { setActiveTab("auditAttendance"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("auditAttendance"); setSearchTerm(""); setMobileNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                 activeTab === "auditAttendance"
                   ? isAuditOnlyUser ? "bg-blue-50 text-blue-600 shadow-sm" : "bg-emerald-50 text-emerald-700 shadow-sm"
@@ -1336,7 +1336,7 @@ export default function PayrollDashboardClient({
               <span>{isAuditOnlyUser ? "Chấm công" : "Chấm công audit"}</span>
             </button>
             <button
-              onClick={() => { setActiveTab("auditSheet"); setSearchTerm(""); }}
+              onClick={() => { setActiveTab("auditSheet"); setSearchTerm(""); setMobileNavOpen(false); }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all font-semibold cursor-pointer text-left ${
                 activeTab === "auditSheet"
                   ? isAuditOnlyUser ? "bg-blue-50 text-blue-600 shadow-sm" : "bg-emerald-50 text-emerald-700 shadow-sm"
@@ -1954,7 +1954,7 @@ export default function PayrollDashboardClient({
                         ) : (
                           paginatedEmployees.map((e) => (
                             <tr key={e.id} className="hover:bg-zinc-50/50 transition-colors whitespace-nowrap">
-                              <td className="px-4 py-2.5 text-center">
+                              <td data-label="Chọn" className="px-4 py-2.5 text-center">
                                 <input
                                   type="checkbox"
                                   checked={selectedEmployeeIds.has(e.id)}
@@ -1963,16 +1963,16 @@ export default function PayrollDashboardClient({
                                   className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
                                 />
                               </td>
-                              <td className="px-4 py-2.5 font-mono font-bold text-zinc-700">{e.employeeCode}</td>
-                              <td className="px-4 py-2.5 font-semibold text-zinc-800">{e.fullName}</td>
-                              <td className="px-4 py-2.5 text-zinc-500">{e.gender || "-"}</td>
-                              <td className="px-4 py-2.5 font-medium text-zinc-700">{e.departmentName || "-"}</td>
-                              <td className="px-4 py-2.5 text-zinc-500">{e.positionTitle || "-"}</td>
-                              <td className="px-4 py-2.5 text-zinc-500">{e.joinedDate ? formatDate(e.joinedDate) : "-"}</td>
-                              <td className="px-4 py-2.5 text-zinc-500 text-center">
+                              <td data-label="Mã nhân sự" className="px-4 py-2.5 font-mono font-bold text-zinc-700">{e.employeeCode}</td>
+                              <td data-label="Họ và tên" className="px-4 py-2.5 font-semibold text-zinc-800">{e.fullName}</td>
+                              <td data-label="Giới tính" className="px-4 py-2.5 text-zinc-500">{e.gender || "-"}</td>
+                              <td data-label="Bộ phận" className="px-4 py-2.5 font-medium text-zinc-700">{e.departmentName || "-"}</td>
+                              <td data-label="Chức vụ" className="px-4 py-2.5 text-zinc-500">{e.positionTitle || "-"}</td>
+                              <td data-label="Ngày gia nhập" className="px-4 py-2.5 text-zinc-500">{e.joinedDate ? formatDate(e.joinedDate) : "-"}</td>
+                              <td data-label="Người phụ thuộc" className="px-4 py-2.5 text-zinc-500 text-center">
                                 {e.dependentCount || 0} {e.hasChildUnder6 && <span className="block text-[10px] text-emerald-600 font-bold">(Có con &lt; 6t)</span>}
                               </td>
-                              <td className="px-4 py-2.5 text-right">
+                              <td data-label="Lương cấu hình" className="px-4 py-2.5 text-right">
                                 <button
                                   onClick={() => openSalaryConfigModal(e)}
                                   className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-500 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1 cursor-pointer"
@@ -1981,7 +1981,7 @@ export default function PayrollDashboardClient({
                                   <span>Cấu hình Lương</span>
                                 </button>
                               </td>
-                              <td className="px-4 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
+                              <td data-label="Thao tác" className="px-4 py-2.5 sticky right-0 bg-white border-l border-zinc-100 shadow-[-4px_0_12px_-4px_rgba(0,0,0,0.08)] text-right z-10">
                                 <div className="flex justify-end gap-2">
                                   <button onClick={() => openEmployeeModal(e)} className="icon-btn hover:text-blue-600 rounded-lg p-1.5 cursor-pointer"><Edit2 className="w-4 h-4" /></button>
                                   <button onClick={() => handleEmployeeDelete(e.id)} className="icon-btn-danger hover:bg-red-50 hover:text-red-700 rounded-lg p-1.5 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
