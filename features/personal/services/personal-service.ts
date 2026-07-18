@@ -17,11 +17,6 @@ export class PersonalService {
   }
 
   static async getOverview(employeeId: string, factoryId: string, month?: string) {
-    const attendanceParams: string[] = [employeeId, factoryId];
-    const attendanceMonthCondition = month
-      ? "AND ar.work_date >= $3::date AND ar.work_date < ($3::date + INTERVAL '1 month')"
-      : "";
-    if (month) attendanceParams.push(`${month}-01`);
     const [profile, attendance, payrollHistory, salaryConfig, pendingPayrolls] = await Promise.all([
       queryOne(
         `SELECT employee_code as "employeeCode", full_name as "fullName", department_name as "departmentName",
@@ -40,7 +35,7 @@ export class PersonalService {
            WHERE ar.employee_id = $1
              AND EXISTS (SELECT 1 FROM payroll_cycles pc WHERE pc.id = ar.payroll_cycle_id AND pc.factory_id = $2)
            ORDER BY ar.work_date DESC LIMIT 31`,
-          attendanceParams
+          [employeeId, factoryId]
         ),
       query(
         `SELECT pc.id as "cycleId", pc.name as "cycleName", pc.period_start as "periodStart", pc.period_end as "periodEnd",
