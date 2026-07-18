@@ -24,13 +24,16 @@ export default async function ModulesPage() {
     redirect("/login");
   }
 
-  // Get allowed modules
-  const allModules = await query(
-    `SELECT id, code, name, description, route_path as "routePath", sort_order as "sortOrder" 
-     FROM modules 
-     WHERE is_active = true 
-     ORDER BY sort_order ASC`
-  );
+  const canAccessPayroll = user.isAdmin || Boolean(user.permissions.payroll?.view);
+  const [allModules, payrollFactories] = await Promise.all([
+    query(
+      `SELECT id, code, name, description, route_path as "routePath", sort_order as "sortOrder"
+       FROM modules
+       WHERE is_active = true
+       ORDER BY sort_order ASC`
+    ),
+    canAccessPayroll ? getAccessibleFactories(user) : Promise.resolve([]),
+  ]);
 
   const allowedModules = user.isAdmin
     ? allModules
@@ -41,7 +44,6 @@ export default async function ModulesPage() {
   const authModule = allowedModules.find((mod) => mod.code === "auth");
   const payrollModule = allowedModules.find((mod) => mod.code === "payroll");
   const personalModule = user.employeeId ? allowedModules.find((mod) => mod.code === "personal") : undefined;
-  const payrollFactories = payrollModule ? await getAccessibleFactories(user) : [];
 
   const getModuleIcon = (code: string) => {
     switch (code) {
@@ -168,7 +170,7 @@ export default async function ModulesPage() {
             {[
               ...(user.isSystemAdmin && authModule ? [authModule] : []),
               ...(personalModule ? [personalModule] : []),
-              ...payrollFactories.map((factory: any) => ({
+              ...payrollFactories.map((factory: { id: string; name: string }) => ({
                 ...payrollModule,
                 id: `${payrollModule.id}-${factory.id}`,
                 name: factory.name,

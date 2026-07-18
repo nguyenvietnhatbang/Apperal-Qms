@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, User, AlertCircle, Loader2 } from "lucide-react";
 
@@ -37,9 +38,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Redirect to module selection
-      router.push("/modules");
-      router.refresh();
+      router.replace("/modules");
     } catch (err) {
       console.error("Login error:", err);
       setError("Đã xảy ra lỗi kết nối. Vui lòng kiểm tra mạng.");
@@ -51,13 +50,16 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-50 text-slate-950 font-sans lg:grid lg:grid-cols-[1.08fr_0.92fr]">
       <section
         className="relative hidden min-h-screen overflow-hidden bg-slate-950 px-16 py-16 text-white lg:flex lg:flex-col lg:justify-between"
-        style={{
-          backgroundImage:
-            "linear-gradient(90deg, rgba(2,6,23,0.9), rgba(2,6,23,0.78) 46%, rgba(2,6,23,0.34)), url('/software-operations-login-bg.png')",
-          backgroundPosition: "center",
-          backgroundSize: "cover",
-        }}
       >
+        <Image
+          src="/software-operations-login-bg.png"
+          alt=""
+          fill
+          sizes="54vw"
+          quality={65}
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-linear-to-r from-slate-950/90 via-slate-950/78 to-slate-950/34" />
         <div className="relative z-10">
           <div className="flex items-center gap-4">
             <div className="flex h-[70px] w-[70px] items-center justify-center bg-emerald-600 text-2xl font-black tracking-tight text-white">

@@ -58,7 +58,7 @@ export function hashPassword(password: string): string {
 /**
  * Verify password against stored scrypt hash
  */
-export function verifyPassword(password: string, hashStr: string): boolean {
+export async function verifyPassword(password: string, hashStr: string): Promise<boolean> {
   try {
     const parts = hashStr.split(":");
     if (parts.length !== 6 || parts[0] !== "scrypt") {
@@ -72,10 +72,18 @@ export function verifyPassword(password: string, hashStr: string): boolean {
     const hashHex = parts[5];
     
     const salt = Buffer.from(saltHex, "hex");
-    const keylen = Buffer.from(hashHex, "hex").length;
-    
-    const derivedKey = crypto.scryptSync(password, salt, keylen, { N, r, p });
-    return derivedKey.toString("hex") === hashHex;
+    const storedKey = Buffer.from(hashHex, "hex");
+    const derivedKey = await new Promise<Buffer>((resolve, reject) => {
+      crypto.scrypt(password, salt, storedKey.length, { N, r, p }, (error, key) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve(Buffer.from(key));
+      });
+    });
+
+    return crypto.timingSafeEqual(derivedKey, storedKey);
   } catch (error) {
     console.error("Error verifying password:", error);
     return false;

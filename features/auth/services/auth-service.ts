@@ -1,12 +1,12 @@
 import { cookies } from "next/headers";
 import { queryOne, query } from "@/lib/db";
-import { generateToken, hashToken, verifyPassword, getCurrentUser, UserSessionData } from "@/lib/auth-session";
+import { generateToken, hashToken, verifyPassword } from "@/lib/auth-session";
 
 export class AuthService {
   /**
-   * Log in user, return session data on success, null on failure
+   * Log in user and create a session.
    */
-  static async login(username: string, password: string, userAgent?: string, ipAddress?: string): Promise<UserSessionData | null> {
+  static async login(username: string, password: string, userAgent?: string, ipAddress?: string): Promise<boolean> {
     try {
       // Find active user
       const user = await queryOne(
@@ -18,19 +18,19 @@ export class AuthService {
       
       if (!user) {
         console.log(`Login failed: user not found: ${username}`);
-        return null;
+        return false;
       }
       
       if (user.status !== "active") {
         console.log(`Login failed: user is ${user.status}: ${username}`);
-        return null;
+        return false;
       }
       
       // Verify password
-      const isPasswordMatch = verifyPassword(password, user.password_hash);
+      const isPasswordMatch = await verifyPassword(password, user.password_hash);
       if (!isPasswordMatch) {
         console.log(`Login failed: password mismatch for user: ${username}`);
-        return null;
+        return false;
       }
       
       // Create session
@@ -39,13 +39,15 @@ export class AuthService {
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours expiration
       
       await query(
-        `INSERT INTO user_sessions (user_id, token_hash, user_agent, ip_address, expires_at)
-         VALUES ($1, $2, $3, $4, $5)`,
+        `WITH created_session AS (
+           INSERT INTO user_sessions (user_id, token_hash, user_agent, ip_address, expires_at)
+           VALUES ($1, $2, $3, $4, $5)
+         )
+         UPDATE app_users
+         SET last_login_at = now()
+         WHERE id = $1`,
         [user.id, tokenHash, userAgent || null, ipAddress || null, expiresAt]
       );
-      
-      // Update last login
-      await query(`UPDATE app_users SET last_login_at = now() WHERE id = $1`, [user.id]);
       
       // Set session cookie
       const cookieStore = await cookies();
@@ -57,11 +59,10 @@ export class AuthService {
         path: "/",
       });
       
-      // Fetch permissions & return user data
-      return await getCurrentUser();
+      return true;
     } catch (error) {
       console.error("Error in AuthService.login:", error);
-      return null;
+      return false;
     }
   }
 
