@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { BadgeCheck, Sparkles, User } from "lucide-react";
+import { Building2, Sparkles, User } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth-session";
 import { getAccessibleFactories } from "@/lib/factory-scope";
 import { query } from "@/lib/db";
@@ -39,9 +39,6 @@ export default async function ModulesPage() {
   const workspaceModules: WorkspaceModule[] = [
     ...(user.isSystemAdmin && authModule ? [authModule] : []),
     ...(personalModule ? [personalModule] : []),
-    ...(user.isAdmin || user.permissions.payroll?.update
-      ? [{ id: "leave-requests", name: "Duyệt đơn nghỉ", description: "Xem, duyệt và theo dõi đơn nghỉ của nhân viên.", routePath: "/leave-requests", code: "leave_requests" }]
-      : []),
     ...(payrollModule
       ? payrollFactories.map((factory: { id: string; name: string }) => ({
           ...payrollModule,
@@ -77,34 +74,34 @@ export default async function ModulesPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        <section className="rounded-2xl border border-slate-200 bg-white px-5 py-6 shadow-sm sm:px-7">
+      <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-7 sm:px-6 sm:py-10">
+        <section className="border-b border-slate-200 pb-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
-                <BadgeCheck className="h-3.5 w-3.5" /> Workspace
-              </div>
-              <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-                Chào buổi sáng, <span className="text-blue-600">{user.displayName}</span>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-700">Không gian làm việc</p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+                Chào, {user.displayName}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
-                Chọn phân hệ phù hợp để bắt đầu công việc. Nội dung được hiển thị theo quyền truy cập của bạn.
+                Chọn phân hệ để bắt đầu công việc hôm nay.
               </p>
             </div>
-            <div className="inline-flex w-fit items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-800">
-              <span className="text-emerald-700">Nhà xưởng:</span> {user.factoryName}
+            <div className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-slate-600">
+              <Building2 className="h-4 w-4 text-emerald-600" />
+              <span className="text-slate-400">Nhà xưởng</span>
+              <span className="text-slate-900">{user.factoryName}</span>
             </div>
           </div>
         </section>
 
         {workspaceModules.length === 0 ? (
-          <section className="mt-6 max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <BadgeCheck className="mx-auto h-10 w-10 text-slate-300" />
+          <section className="mt-8 max-w-lg rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <Building2 className="mx-auto h-10 w-10 text-slate-300" />
             <h2 className="mt-3 text-lg font-black text-slate-900">Chưa có phân hệ được cấp quyền</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">Vui lòng liên hệ quản trị viên để được cấp quyền truy cập phù hợp.</p>
           </section>
         ) : (
-          <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.65fr)]">
+          <div className="mt-8 space-y-10">
             <ModuleDirectory modules={workspaceModules} />
             <NewsPlaceholder />
           </div>
