@@ -58,16 +58,12 @@ export default function ModuleDirectory({ modules }: ModuleDirectoryProps) {
 
   return (
     <section aria-labelledby="workspace-modules-heading">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">Danh mục</p>
-            <div className="mt-1 flex items-center gap-2">
-              <h2 id="workspace-modules-heading" className="text-xl font-black tracking-tight text-slate-950">Phân hệ của bạn</h2>
-              <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+              <h2 id="workspace-modules-heading" className="text-base font-black tracking-tight text-slate-950">Phân hệ</h2>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-600">
                 {modules.length}
               </span>
-            </div>
-            <p className="mt-1 text-sm text-slate-500">Các phân hệ được cấp quyền truy cập.</p>
           </div>
 
           <div className="w-full sm:w-72">
