@@ -1,3 +1,4 @@
+import type { PersonalLeaveSummary } from "@/features/personal/types";
 import { query, queryOne } from "@/lib/db";
 
 export class PersonalService {
@@ -24,8 +25,34 @@ export class PersonalService {
     );
   }
 
+  static async getLeaveSummary(employeeId: string, factoryId: string, month: string): Promise<PersonalLeaveSummary | null> {
+    return queryOne<PersonalLeaveSummary>(
+      `SELECT COALESCE(pa.annual_leave_total, pi.annual_leave_total, 0) as "annualLeaveTotal",
+              COALESCE(pa.annual_leave_used_cumulative, pi.annual_leave_used_cumulative, 0) as "annualLeaveUsedCumulative",
+              COALESCE(pa.paid_leave_days_override, pi.paid_leave_days, 0) as "paidLeaveDays"
+       FROM payroll_cycles pc
+       LEFT JOIN payroll_items pi ON pi.payroll_cycle_id = pc.id AND pi.employee_id = $1
+       LEFT JOIN payroll_adjustments pa ON pa.payroll_cycle_id = pc.id AND pa.employee_id = $1
+       WHERE pc.factory_id = $2
+         AND pc.period_start < ($3::date + INTERVAL '1 month')
+         AND pc.period_end >= $3::date
+       ORDER BY pc.period_end DESC
+       LIMIT 1`,
+      [employeeId, factoryId, `${month}-01`]
+    );
+  }
+
+  static async getAttendanceData(employeeId: string, factoryId: string, month: string) {
+    const [attendance, leaveSummary] = await Promise.all([
+      this.getAttendance(employeeId, factoryId, month),
+      this.getLeaveSummary(employeeId, factoryId, month),
+    ]);
+
+    return { attendance, leaveSummary };
+  }
+
   static async getOverview(employeeId: string, factoryId: string, month?: string) {
-    const [profile, attendance, payrollHistory, salaryConfigHistory, pendingPayrolls] = await Promise.all([
+    const [profile, attendance, leaveSummary, payrollHistory, salaryConfigHistory, pendingPayrolls] = await Promise.all([
       queryOne(
         `SELECT employee_code as "employeeCode", full_name as "fullName", department_name as "departmentName",
                 position_title as "positionTitle", joined_date as "joinedDate", status
@@ -45,6 +72,7 @@ export class PersonalService {
            ORDER BY ar.work_date DESC LIMIT 31`,
           [employeeId, factoryId]
         ),
+      month ? this.getLeaveSummary(employeeId, factoryId, month) : Promise.resolve(null),
       query(
         `SELECT pc.id as "cycleId", pc.name as "cycleName", pc.period_start as "periodStart", pc.period_end as "periodEnd",
                 pc.status, pi.actual_workdays as "actualWorkdays", pi.paid_leave_days as "paidLeaveDays",
@@ -108,6 +136,6 @@ export class PersonalService {
 
     if (!profile) return null;
     const salaryConfig = salaryConfigHistory.find((config) => config.isCurrent) || null;
-    return { profile, attendance, payrollHistory, salaryConfig, salaryConfigHistory, pendingPayrolls };
+    return { profile, attendance, leaveSummary, payrollHistory, salaryConfig, salaryConfigHistory, pendingPayrolls };
   }
 }

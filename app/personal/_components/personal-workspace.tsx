@@ -30,7 +30,7 @@ export default function PersonalWorkspace({ user, overview, initialMonth, initia
       <PersonalDashboard user={user} initialOverview={overview} embedded />
     </div>
     <div className={activeView === "attendance" ? "contents" : "hidden"} aria-hidden={activeView !== "attendance"}>
-      <PersonalAttendance user={user} initialMonth={initialMonth} initialRecords={overview.attendance} embedded />
+      <PersonalAttendance user={user} initialMonth={initialMonth} initialRecords={overview.attendance} initialLeaveSummary={overview.leaveSummary} embedded />
     </div>
     <div className={activeView === "salary" ? "contents" : "hidden"} aria-hidden={activeView !== "salary"}>
       <PersonalSalaryHistory overview={overview} />

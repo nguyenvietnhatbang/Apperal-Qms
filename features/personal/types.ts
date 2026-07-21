@@ -31,6 +31,12 @@ export interface AttendanceRecord {
   note: string | null;
 }
 
+export interface PersonalLeaveSummary {
+  annualLeaveTotal: string | number;
+  annualLeaveUsedCumulative: string | number;
+  paidLeaveDays: string | number;
+}
+
 export interface PayrollSummary {
   cycleId: string;
   cycleName: string;
@@ -94,6 +100,7 @@ export interface PersonalOverview {
     status: string;
   };
   attendance: AttendanceRecord[];
+  leaveSummary: PersonalLeaveSummary | null;
   payrollHistory: PayrollSummary[];
   pendingPayrolls: PayrollSummary[];
   salaryConfig: SalaryConfig | null;

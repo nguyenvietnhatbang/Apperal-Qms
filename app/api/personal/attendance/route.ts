@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
       return ApiResponse.badRequest("Tháng không hợp lệ.", "INVALID_MONTH");
     }
 
-    const attendance = await PersonalService.getAttendance(currentUser.employeeId, currentUser.factoryId, month);
-    return ApiResponse.success({ attendance });
+    const attendanceData = await PersonalService.getAttendanceData(currentUser.employeeId, currentUser.factoryId, month);
+    return ApiResponse.success(attendanceData);
   } catch (error: unknown) {
     console.error("Error in GET personal attendance:", error);
     return ApiResponse.error("Không thể tải chấm công.", "SERVER_ERROR", undefined, 500);

@@ -2,23 +2,30 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Timer, TriangleAlert, X } from "lucide-react";
-import type { AttendanceRecord, PersonalUser } from "@/features/personal/types";
+import type { AttendanceRecord, PersonalLeaveSummary, PersonalUser } from "@/features/personal/types";
 import PersonalShell from "./personal-shell";
 
 interface PersonalAttendanceProps {
   user: PersonalUser;
   initialMonth: string;
   initialRecords: AttendanceRecord[];
+  initialLeaveSummary: PersonalLeaveSummary | null;
   embedded?: boolean;
 }
 
 const weekDays = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
 
-export default function PersonalAttendance({ user, initialMonth, initialRecords, embedded = false }: PersonalAttendanceProps) {
-  const attendanceCache = useRef(new Map<string, AttendanceRecord[]>([[initialMonth, initialRecords]]));
+interface AttendanceMonthData {
+  attendance: AttendanceRecord[];
+  leaveSummary: PersonalLeaveSummary | null;
+}
+
+export default function PersonalAttendance({ user, initialMonth, initialRecords, initialLeaveSummary, embedded = false }: PersonalAttendanceProps) {
+  const attendanceCache = useRef(new Map<string, AttendanceMonthData>([[initialMonth, { attendance: initialRecords, leaveSummary: initialLeaveSummary }]]));
   const activeRequest = useRef(0);
   const [month, setMonth] = useState(initialMonth);
   const [records, setRecords] = useState(initialRecords);
+  const [leaveSummary, setLeaveSummary] = useState(initialLeaveSummary);
   const [inspectedRecord, setInspectedRecord] = useState<AttendanceRecord | null>(null);
   const [mobileRecord, setMobileRecord] = useState<AttendanceRecord | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,7 +34,8 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords,
   useEffect(() => {
     const cachedRecords = attendanceCache.current.get(month);
     if (cachedRecords) {
-      setRecords(cachedRecords);
+      setRecords(cachedRecords.attendance);
+      setLeaveSummary(cachedRecords.leaveSummary);
       setIsLoading(false);
       return;
     }
@@ -35,15 +43,20 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords,
     const requestId = ++activeRequest.current;
     const controller = new AbortController();
     setRecords([]);
+    setLeaveSummary(null);
     setIsLoading(true);
     setError(null);
     void fetch(`/api/personal/attendance?month=${month}`, { signal: controller.signal })
       .then((response) => response.json())
       .then((payload) => {
         if (!payload.success) throw new Error(payload.error?.message);
-        const attendance = (payload.data.attendance || []) as AttendanceRecord[];
-        attendanceCache.current.set(month, attendance);
-        if (activeRequest.current === requestId) setRecords(attendance);
+        const attendanceData = payload.data as AttendanceMonthData;
+        const nextData = { attendance: attendanceData.attendance || [], leaveSummary: attendanceData.leaveSummary || null };
+        attendanceCache.current.set(month, nextData);
+        if (activeRequest.current === requestId) {
+          setRecords(nextData.attendance);
+          setLeaveSummary(nextData.leaveSummary);
+        }
       })
       .catch((loadError) => {
         if (!(loadError instanceof DOMException && loadError.name === "AbortError") && activeRequest.current === requestId) {
@@ -60,7 +73,14 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords,
         if (attendanceCache.current.has(targetMonth)) continue;
         void fetch(`/api/personal/attendance?month=${targetMonth}`)
           .then((response) => response.json())
-          .then((payload) => { if (payload.success) attendanceCache.current.set(targetMonth, payload.data.attendance || []); })
+          .then((payload) => {
+            if (payload.success) {
+              attendanceCache.current.set(targetMonth, {
+                attendance: payload.data.attendance || [],
+                leaveSummary: payload.data.leaveSummary || null,
+              });
+            }
+          })
           .catch(() => undefined);
       }
     }, 250);
@@ -78,7 +98,10 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords,
     const cachedRecords = attendanceCache.current.get(nextMonth);
     setInspectedRecord(null);
     setMobileRecord(null);
-    if (cachedRecords) setRecords(cachedRecords);
+    if (cachedRecords) {
+      setRecords(cachedRecords.attendance);
+      setLeaveSummary(cachedRecords.leaveSummary);
+    }
     setMonth(nextMonth);
   };
 
@@ -87,7 +110,7 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords,
       <section className="border-b border-slate-300 pb-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div><p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Time & attendance</p><h1 className="mt-1 text-3xl font-black tracking-tight text-slate-950">Chấm công cá nhân</h1><p className="mt-1 text-sm text-slate-500">Rê vào một ngày để xem đầy đủ dữ liệu ngay bên cạnh lịch.</p></div>
-          <div className="grid grid-cols-3 gap-2 sm:min-w-[430px]"><HeaderMetric icon={<CalendarDays />} label="Ngày công" value={totals.workdays.toFixed(1)} /><HeaderMetric icon={<Timer />} label="Tổng OT" value={`${totals.overtime.toFixed(1)}h`} /><HeaderMetric icon={<TriangleAlert />} label="Bất thường" value={`${totals.issueDays} ngày`} /></div>
+          <div className="grid grid-cols-3 gap-2 xl:min-w-[720px] xl:grid-cols-6"><HeaderMetric icon={<CalendarDays />} label="Ngày công" value={totals.workdays.toFixed(1)} /><HeaderMetric icon={<Timer />} label="Tổng OT" value={`${totals.overtime.toFixed(1)}h`} /><HeaderMetric icon={<TriangleAlert />} label="Bất thường" value={`${totals.issueDays} ngày`} /><HeaderMetric icon={<CalendarDays />} label="Tổng ngày phép" value={leaveDays(leaveSummary?.annualLeaveTotal)} /><HeaderMetric icon={<CalendarDays />} label="Đã nghỉ cộng dồn" value={leaveDays(leaveSummary?.annualLeaveUsedCumulative)} /><HeaderMetric icon={<CalendarDays />} label="Nghỉ trong tháng" value={leaveDays(leaveSummary?.paidLeaveDays)} /></div>
         </div>
       </section>
 
@@ -151,6 +174,7 @@ function Legend({ tone, label }: { tone: string; label: string }) { return <span
 function getAttendanceState(record?: AttendanceRecord) { if (!record) return { label: "Không dữ liệu", cellClass: "bg-slate-50 text-slate-300", dotClass: "bg-slate-300", badgeClass: "bg-slate-200 text-slate-600" }; const hasWork = Number(record.workdayCount || 0) > 0; const hasOvertime = totalOvertime(record) > 0; const hasIssue = Number(record.lateMinutes || 0) > 0 || Number(record.earlyLeaveMinutes || 0) > 0; if (!hasWork) return { label: record.symbol || "Nghỉ", cellClass: "bg-rose-50 text-rose-900", dotClass: "bg-rose-500", badgeClass: "bg-rose-100 text-rose-700" }; if (hasIssue) return { label: "Bất thường", cellClass: "bg-amber-50 text-amber-950", dotClass: "bg-amber-500", badgeClass: "bg-amber-100 text-amber-700" }; if (hasOvertime) return { label: "Có OT", cellClass: "bg-sky-50 text-sky-950", dotClass: "bg-sky-500", badgeClass: "bg-sky-100 text-sky-700" }; return { label: "Đi làm", cellClass: "bg-emerald-50 text-emerald-950", dotClass: "bg-emerald-500", badgeClass: "bg-emerald-100 text-emerald-700" }; }
 function getAttendanceTotals(records: AttendanceRecord[]) { return records.reduce((totals, record) => ({ workdays: totals.workdays + Number(record.workdayCount || 0), overtime: totals.overtime + totalOvertime(record), issueDays: totals.issueDays + (Number(record.lateMinutes || 0) > 0 || Number(record.earlyLeaveMinutes || 0) > 0 ? 1 : 0) }), { workdays: 0, overtime: 0, issueDays: 0 }); }
 function totalOvertime(record: AttendanceRecord) { return Number(record.overtimeHours || 0) + Number(record.overtimeSundayHours || 0) + Number(record.overtimeHolidayHours || 0); }
+function leaveDays(value?: string | number) { return value === undefined ? "--" : `${Number(value || 0).toFixed(1)} ngày`; }
 function offsetMonth(month: string, offset: number) { const [year, monthIndex] = month.split("-").map(Number); const date = new Date(year, monthIndex - 1 + offset, 1); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; }
 function getTodayKey() { const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()); const value = (type: string) => parts.find((part) => part.type === type)?.value; return `${value("year")}-${value("month")}-${value("day")}`; }
 function formatCalendarDate(value: string) { const [year, month, day] = String(value).slice(0, 10).split("-"); return `${day}/${month}/${year}`; }
