@@ -82,19 +82,28 @@ export class PayrollCalculationService {
                SELECT DISTINCT ON (employee_id, work_date)
                       employee_id, work_date, symbol, workday_count,
                       overtime_normal_hours, overtime_sunday_hours, overtime_holiday_hours
-               FROM attendance_records
+             FROM attendance_records
                WHERE payroll_cycle_id = $1
                  AND employee_id = ANY($2::uuid[])
                  AND work_date >= $3::date
-                 AND work_date <= $4::date
+               AND work_date <= $4::date
                ORDER BY employee_id, work_date, updated_at DESC, created_at DESC, id DESC
+             ), approved_leave_requests AS (
+               SELECT employee_id,
+                      COALESCE(SUM(duration_days) FILTER (WHERE leave_type IN ('paid_leave', 'sick_leave')), 0) as "paidLeaveDays"
+               FROM leave_requests
+               WHERE status = 'approved'
+                 AND employee_id = ANY($2::uuid[])
+                 AND leave_date >= $3::date
+                 AND leave_date <= $4::date
+               GROUP BY employee_id
              )
-             SELECT employee_id as "employeeId",
+             SELECT ca.employee_id as "employeeId",
                     COALESCE(SUM(CASE
                       WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN', 'P', 'BH') THEN 1
                       WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('PN/2', 'P/2', 'BH/2') THEN 0.5
                       ELSE 0
-                    END), 0) as "paidLeaveDays",
+                    END), 0) + COALESCE(MAX(lr."paidLeaveDays"), 0) as "paidLeaveDays",
                     COALESCE(SUM(CASE
                       WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L', 'LE') THEN 1
                       WHEN UPPER(TRIM(COALESCE(symbol, ''))) IN ('L/2', 'LE/2') THEN 0.5
@@ -116,8 +125,9 @@ export class PayrollCalculationService {
                     COALESCE(SUM(overtime_normal_hours), 0) as "overtimeNormalHours",
                     COALESCE(SUM(overtime_sunday_hours), 0) as "overtimeSundayHours",
                     COALESCE(SUM(overtime_holiday_hours), 0) as "overtimeHolidayHours"
-             FROM cycle_attendance
-             GROUP BY employee_id`,
+             FROM cycle_attendance ca
+             LEFT JOIN approved_leave_requests lr ON lr.employee_id = ca.employee_id
+             GROUP BY ca.employee_id`,
             [cycleId, employeeIds, periodStartStr, periodEndStr]
           )
         : { rows: [] };

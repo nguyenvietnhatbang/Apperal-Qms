@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock3, Timer, TriangleAlert, X } from "lucide-react";
 import type { AttendanceRecord, PersonalLeaveSummary, PersonalUser } from "@/features/personal/types";
 import PersonalShell from "./personal-shell";
+import PersonalLeaveRequests from "./personal-leave-requests";
 
 interface PersonalAttendanceProps {
   user: PersonalUser;
@@ -139,6 +140,8 @@ export default function PersonalAttendance({ user, initialMonth, initialRecords,
           </div>
         )}
       </section>
+
+      <PersonalLeaveRequests />
 
       {mobileRecord && <MobileAttendanceDrawer record={mobileRecord} onClose={() => setMobileRecord(null)} />}
     </>

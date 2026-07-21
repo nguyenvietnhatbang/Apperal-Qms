@@ -253,6 +253,23 @@ CREATE TABLE IF NOT EXISTS attendance_records (
   UNIQUE (payroll_cycle_id, employee_code, work_date)
 );
 
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  factory_id uuid NOT NULL REFERENCES factories(id) ON DELETE RESTRICT,
+  leave_type varchar(30) NOT NULL CHECK (leave_type IN ('paid_leave', 'sick_leave', 'late_with_permission')),
+  leave_date date NOT NULL,
+  duration_days numeric(3,1) NOT NULL CHECK (duration_days IN (0.5, 1)),
+  reason text NOT NULL,
+  status varchar(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+  requested_by uuid NOT NULL REFERENCES app_users(id) ON DELETE RESTRICT,
+  reviewed_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  reviewed_at timestamptz,
+  review_note text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS payroll_adjustments (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   payroll_cycle_id uuid NOT NULL REFERENCES payroll_cycles(id) ON DELETE CASCADE,
@@ -695,6 +712,13 @@ CREATE INDEX IF NOT EXISTS idx_user_factory_memberships_factory
 CREATE INDEX IF NOT EXISTS idx_user_sessions_user_expires
   ON user_sessions (user_id, expires_at)
   WHERE revoked_at IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_leave_requests_active_employee_date
+  ON leave_requests (employee_id, leave_date)
+  WHERE status IN ('pending', 'approved');
+
+CREATE INDEX IF NOT EXISTS idx_leave_requests_factory_status_date
+  ON leave_requests (factory_id, status, leave_date DESC);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_employees_factory_code_unique
   ON employees (factory_id, employee_code);

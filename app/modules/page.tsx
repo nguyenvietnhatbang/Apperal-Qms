@@ -170,6 +170,7 @@ export default async function ModulesPage() {
             {[
               ...(user.isSystemAdmin && authModule ? [authModule] : []),
               ...(personalModule ? [personalModule] : []),
+              ...(user.isAdmin || user.permissions.payroll?.update ? [{ id: "leave-requests", name: "Duyệt đơn nghỉ", description: "Xem, duyệt và theo dõi đơn nghỉ của nhân viên.", routePath: "/leave-requests", code: "leave_requests" }] : []),
               ...payrollFactories.map((factory: { id: string; name: string }) => ({
                 ...payrollModule,
                 id: `${payrollModule.id}-${factory.id}`,
